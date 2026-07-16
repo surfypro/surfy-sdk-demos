@@ -9,14 +9,23 @@
     "dev:server": "pnpm --filter demo-server dev",
     "dev": "pnpm --parallel --filter react-web --filter demo-server dev",
     "build:react": "pnpm --filter react-web build",
+    "build:functions": "bash scripts/build-netlify-functions.sh",
+    "build:netlify": "bash scripts/build-netlify.sh",
+    "serve:production": "node scripts/serve-production.mjs",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up --build",
     "test:e2e": "pnpm --filter react-web test:e2e",
     "test:e2e:ui": "pnpm --filter react-web test:e2e:ui",
     "sync:sdk": "bash scripts/sync-local-sdk.sh",
     "install:all": "pnpm install -r",
     "scan:secrets": "bash scripts/scan-secrets.sh"
   },
+  "dependencies": {
+    "@surfy/surfy-demo-auth": "workspace:*"
+  },
   "devDependencies": {
     "@netlify/functions": "^4.2.5",
-    "@types/node": "^24.13.2"
+    "@types/node": "^24.13.2",
+    "esbuild": "^0.25.12"
   }
 }

@@ -17,10 +17,13 @@ Monorepo for SDK integration demos:
 3. Install deps:
    - `pnpm install`
 4. Configure env:
-   - `apps/react-web/.env` from `.env.example` (public `VITE_*` only)
-   - `apps/demo-server/.env` from `.env.example` (**secrets** `SURFY_CLIENT_SECRET`)
+   - `apps/react-web/.env` from `.env.example` (public `VITE_*` only — no floor/building IDs)
+   - `apps/demo-server/.env` from `.env.example` with **`SURFY_CONNECTION_STRING`**:
+     `host=https://…;client_id=…;client_secret=…`
 5. Start:
    - `pnpm dev` (Vite + demo-server)
+
+The UI loads buildings / floors live from the API and shows a picker.
 
 ## Deploy on Netlify (alpha demo)
 
@@ -31,9 +34,23 @@ Full guide: **[docs/NETLIFY.md](docs/NETLIFY.md)**.
 Summary:
 
 1. Connect this repo to Netlify (`netlify.toml` is ready).
-2. Set build vars: tenant, floor id, building id (`VITE_*`).
-3. Set function secrets: `SURFY_BASE_URL`, `SURFY_CLIENT_ID`, `SURFY_CLIENT_SECRET`.
+2. Set build vars: `VITE_SURFY_BASE_URL=` (empty) + optional `VITE_DEMO_GATE_KEY`.
+3. Set function secret: `SURFY_CONNECTION_STRING=host=…;client_id=…;client_secret=…`.
 4. Strongly recommended: `DEMO_GATE_KEY` + `VITE_DEMO_GATE_KEY`, and/or Netlify password protection.
+
+### Local Netlify-parity (Docker)
+
+Reproduce the remote build (Vite + function esbuild) and serve with injected env:
+
+```bash
+cp .env.docker.example .env.docker
+# edit SURFY_CONNECTION_STRING
+
+pnpm build:netlify          # same steps as Netlify build command
+docker compose up --build   # http://localhost:8080
+```
+
+`pnpm build:functions` alone verifies that `@surfy/surfy-demo-auth` resolves for Netlify’s esbuild bundler.
 
 ## Documentation (intégrateurs)
 

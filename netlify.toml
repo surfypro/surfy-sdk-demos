@@ -2,7 +2,7 @@
 
 [build]
   base = "."
-  command = "pnpm install --frozen-lockfile && pnpm --filter react-web build"
+  command = "pnpm install --frozen-lockfile && pnpm run build:netlify"
   publish = "apps/react-web/dist"
   functions = "netlify/functions"
 
@@ -11,9 +11,21 @@
   # Set env in the Netlify UI (see docs/NETLIFY.md / .env.netlify.example).
   # Prefer empty VITE_SURFY_BASE_URL so the app uses same-origin + /api/v1 proxy.
   # Secrets: SURFY_CONNECTION_STRING=host=…;client_id=…;client_secret=…
+  # Skip nested install inside build:netlify (already installed above).
+  SKIP_PNPM_INSTALL = "1"
+
 [functions]
   node_bundler = "esbuild"
   directory = "netlify/functions"
+  # Ensure pnpm workspace package is visible to the function bundler.
+  included_files = ["packages/surfy-demo-auth/**", "node_modules/@surfy/**"]
+
+# Health (Docker / probes)
+[[redirects]]
+  from = "/api/health"
+  to = "/.netlify/functions/health"
+  status = 200
+  force = true
 
 # Token mint (server-side secrets)
 [[redirects]]

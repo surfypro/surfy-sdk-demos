@@ -1,0 +1,39 @@
+# Local Netlify-parity stack.
+# Usage:
+#   cp .env.docker.example .env.docker   # fill SURFY_CONNECTION_STRING
+#   docker compose up --build
+#   open http://localhost:8080
+
+services:
+  demos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Baked into the browser bundle at image build time
+        VITE_SURFY_BASE_URL: ${VITE_SURFY_BASE_URL:-}
+        VITE_DEMO_GATE_KEY: ${VITE_DEMO_GATE_KEY:-}
+    ports:
+      - "${DEMOS_PORT:-8080}:8080"
+    env_file:
+      - path: .env.docker
+        required: false
+    environment:
+      # Runtime (Netlify Functions) — never bake client_secret into the image layers if avoidable;
+      # prefer env_file / CI secrets at `up` time.
+      SURFY_CONNECTION_STRING: ${SURFY_CONNECTION_STRING:-}
+      DEMO_GATE_KEY: ${DEMO_GATE_KEY:-}
+      VITE_DEMO_GATE_KEY: ${VITE_DEMO_GATE_KEY:-}
+      NODE_ENV: production
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s

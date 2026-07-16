@@ -13,12 +13,14 @@ fi
 
 echo "Running GitGuardian secret scan..."
 
-if git diff --cached --quiet 2>/dev/null; then
-  echo "-> no staged changes, scanning full repository"
-  ggshield secret scan path --recursive .
-else
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1 && ! git diff --cached --quiet 2>/dev/null; then
   echo "-> scanning staged changes"
   ggshield secret scan pre-commit
+else
+  echo "-> scanning repository (honoring .gitignore, non-interactive)"
+  # --use-gitignore skips local .env / node_modules / dist (secrets stay local)
+  # --yes avoids interactive "N files will be scanned?" prompt
+  ggshield secret scan path --recursive . --yes --use-gitignore
 fi
 
 echo "Secret scan passed."

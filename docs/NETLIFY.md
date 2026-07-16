@@ -64,18 +64,30 @@ Browser
 
 The SDK `base-url` is the Netlify origin. No Surfy CORS change required for the Netlify domain.
 
-## Local parity
+## Local / Docker Netlify parity
+
+Before pushing, reproduce the Netlify build (including function bundling):
 
 ```bash
-# Terminal 1 — SURFY_CONNECTION_STRING in apps/demo-server/.env
-pnpm dev:server
-
-# Terminal 2 — apps/react-web/.env with VITE_SURFY_BASE_URL= empty
-# (vite.config reads host= from demo-server .env for /api/v1 proxy)
-pnpm dev:react
+pnpm build:netlify
+# or: SKIP_PNPM_INSTALL=1 pnpm build:netlify   # after install
 ```
 
-See `apps/react-web/.env.example` and `apps/demo-server/.env.example`.
+`build:functions` runs **esbuild** on `netlify/functions/*` the same way Netlify does — this catches missing workspace deps such as `@surfy/surfy-demo-auth`.
+
+Docker (build args for `VITE_*`, runtime env for secrets):
+
+```bash
+cp .env.docker.example .env.docker
+# set SURFY_CONNECTION_STRING=host=…;client_id=…;client_secret=…
+
+docker compose up --build
+# → http://localhost:8080
+# → GET /api/health
+# → GET /api/surfy-token
+```
+
+Compose injects `SURFY_CONNECTION_STRING` / `DEMO_GATE_KEY` at **container start** (not baked into the image layers unless you put them in build args).
 
 ## Prerequisites
 
