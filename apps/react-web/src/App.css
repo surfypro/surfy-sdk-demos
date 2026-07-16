@@ -1,0 +1,107 @@
+.page {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.page__intro {
+  margin: 0;
+  color: #444;
+}
+
+.demo-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 12px;
+}
+
+.demo-tabs__tab {
+  border: 1px solid #ccc;
+  background: #f7f7f7;
+  border-radius: 6px 6px 0 0;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.demo-tabs__tab--active {
+  background: #fff;
+  border-bottom-color: #fff;
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 #863bff;
+}
+
+.demo-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.demo-section__header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.demo-section__tag {
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+}
+
+.demo-section__description {
+  margin: 4px 0 0;
+  color: #555;
+}
+
+.demo-section__unavailable {
+  padding: 16px;
+  border: 1px dashed #ccc;
+  border-radius: 8px;
+  background: #fafafa;
+  color: #555;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.floor-plan-options {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+button {
+  border: 1px solid #ccc;
+  background: #f7f7f7;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Conteneur à taille fixe : fill-parent ne modifie pas ces dimensions. */
+.layout-host {
+  display: block;
+  width: 100%;
+  height: 70vh;
+  min-height: 420px;
+  border: 1px solid #ddd;
+  overflow: hidden;
+}
+
+.layout-host > * {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

@@ -1,0 +1,36 @@
+# Surfy SDK demos — Netlify (React web)
+
+[build]
+  base = "."
+  command = "pnpm install --frozen-lockfile && pnpm --filter react-web build"
+  publish = "apps/react-web/dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # Set env in the Netlify UI (see docs/NETLIFY.md / .env.netlify.example).
+  # Prefer empty VITE_SURFY_BASE_URL so the app uses same-origin + /api/v1 proxy.
+  # Secrets: SURFY_CONNECTION_STRING=host=…;client_id=…;client_secret=…
+[functions]
+  node_bundler = "esbuild"
+  directory = "netlify/functions"
+
+# Token mint (server-side secrets)
+[[redirects]]
+  from = "/api/surfy-token"
+  to = "/.netlify/functions/surfy-token"
+  status = 200
+  force = true
+
+# Proxy Surfy REST to alpha/prod (avoids browser CORS)
+[[redirects]]
+  from = "/api/v1/*"
+  to = "/.netlify/functions/surfy-api-proxy/:splat"
+  status = 200
+  force = true
+
+# SPA fallback
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

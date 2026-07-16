@@ -1,0 +1,66 @@
+# Dependencies / build
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+dist-ssr/
+**/dist-ssr/
+build/
+.turbo/
+.cache/
+*.tsbuildinfo
+
+# Environment & secrets — never commit real values
+# Keep only *.example templates (incl. .env.netlify.example)
+.env
+.env.*
+!.env.example
+!.env.*.example
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+
+# Common secret / credential filenames
+*.pem
+*.p12
+*.pfx
+*.key
+!*.key.example
+*.crt
+id_rsa
+id_ed25519
+credentials.json
+**/credentials.json
+secrets/
+**/secrets/
+.secrets/
+*.secret
+*.secrets
+
+# Netlify CLI local state (may contain auth tokens)
+.netlify/
+
+# Playwright / e2e artifacts
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+**/test-results/
+**/playwright-report/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+pnpm-debug.log*
+npm-debug.log*
+
+# Local overrides
+*.local
