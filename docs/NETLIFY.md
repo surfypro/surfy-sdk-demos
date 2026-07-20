@@ -8,16 +8,16 @@ This app can be deployed on **Netlify** and talk to **Surfy alpha** (or another 
 |---------|--------|
 | React web demo (API mode) | Yes — session cookie + proxy; floor 2D / building 3D when SDK registers them |
 | Auth mode selector | API now; OAuth / Entra OBO placeholder |
-| Building / floor picker | Yes — reference buildings via `POST /api/v1/data/entities` |
+| Building / floor picker | Yes — reference buildings via proxy `POST /proxy/api/v1/data/entities` |
 | Session `/api/session` | Yes — HttpOnly cookie; **no Surfy JWT in the browser** |
-| Layout API via same-origin proxy | Yes — `/api/v1/*` injects Bearer from connection string |
+| Layout API via same-origin proxy | Yes — unique `/proxy/*` injects Bearer from connection string |
 | React Native | Not on Netlify — use Expo/EAS; WebView loads e.g. `/api/react-web/floor-2d?embed=1` |
 
 ## Security model (important)
 
 | Variable | Where | Public? |
 |----------|--------|---------|
-| *(none for API origin)* | Browser | Always uses **page origin** (`/api/session`, `/api/v1/…`) |
+| *(none for API origin)* | Browser | Always uses **page origin** (`/api/session`, `/proxy/api/v1/…`) |
 | Opaque bearer `surfy-demo-proxy` | Browser → proxy | Not a Surfy credential; proxy swaps it for the real JWT |
 | `VITE_DEMO_GATE_KEY` | Build / browser | Optional shared gate password |
 | `SURFY_CONNECTION_STRING` | Netlify Functions env | **Secret** — `host`;`client_id`;`client_secret` |
@@ -56,14 +56,17 @@ DEMO_GATE_KEY=optional-shared-gate
 
 ## How same-origin proxy works (API mode)
 
+The demo server does **not** implement Surfy routes. It only relays:
+
 ```
 Browser
-  ├─ GET  /api/session              → HttpOnly cookie + { tenant, authMode } (no JWT)
-  ├─ POST /api/v1/data/entities     → list buildings + floors (cookie + opaque bearer)
-  └─ POST /api/v1/layout/...        → layout for the selected WC (Bearer injected server-side)
+  ├─ GET  /api/session                         → HttpOnly cookie + { tenant } (no JWT)
+  ├─ POST /proxy/api/v1/data/entities          → forward + inject Bearer
+  └─ POST /proxy/api/v1/layout/...             → forward + inject Bearer
+         optional ?surfyApiOrigin=https://…     → override Surfy API host
 ```
 
-The SDK `base-url` is the Netlify origin. `setAccessTokenProvider` returns the opaque `surfy-demo-proxy` string; the proxy replaces it with the real Surfy JWT from `SURFY_CONNECTION_STRING`.
+SDK / `SurfyClient` `baseUrl` = `{siteOrigin}/proxy`. Opaque bearer `surfy-demo-proxy` is swapped for the real Surfy JWT from `SURFY_CONNECTION_STRING`.
 
 ## Local / Docker Netlify parity
 

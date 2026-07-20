@@ -22,8 +22,8 @@ Used by `demo-server` and Netlify Functions. Floors / buildings are **not** in e
 ```
 Browser  →  GET /api/surfy-token  →  demo-server / Netlify Function
          →  { token, tenant }
-Browser  →  POST /api/v1/data/entities (buildings) → picker
-Browser  →  POST /api/v1/layout/... (same origin) → proxy → Surfy
+Browser  →  POST /proxy/api/v1/data/entities (buildings) → picker
+Browser  →  POST /proxy/api/v1/layout/... (same origin) → proxy → Surfy
 ```
 
 - The browser/mobile app must not contain `client_secret`.

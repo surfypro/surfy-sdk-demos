@@ -10,6 +10,10 @@
     ".": {
       "types": "./index.d.ts",
       "import": "./index.js"
+    },
+    "./client": {
+      "types": "./client.d.ts",
+      "import": "./client.js"
     }
   }
 }

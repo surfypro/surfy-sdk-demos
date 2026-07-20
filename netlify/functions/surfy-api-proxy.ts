@@ -1,14 +1,13 @@
 import type { Handler, HandlerEvent } from '@netlify/functions';
 import {
   demoAuthErrorBody,
-  fetchSurfyAccessToken,
+  forwardSurfyProxyRequest,
   httpStatusFromDemoAuthError,
-  isDemoProxyBearer,
   loadSurfyDemoAuthEnv,
-  normalizeBaseUrl,
-  sanitizeDemoHttpStatus,
+  resolveSurfyProxyUpstreamPath,
   SurfyConfigError,
   SURFY_DEMO_SESSION_COOKIE,
+  SURFY_DEMO_API_ORIGIN_HEADER,
 } from '@surfy/surfy-demo-auth';
 
 function readCookie(event: HandlerEvent, name: string): string | undefined {
@@ -21,9 +20,13 @@ function readCookie(event: HandlerEvent, name: string): string | undefined {
   return undefined;
 }
 
+function readHeader(event: HandlerEvent, name: string): string | undefined {
+  return event.headers[name] ?? event.headers[name.toLowerCase()] ?? undefined;
+}
+
 /**
- * Proxies /api/v1/* → Surfy and injects the API Bearer from SURFY_CONNECTION_STRING.
- * Browser never receives the Surfy JWT (session cookie + opaque proxy bearer only).
+ * Unique Surfy proxy (Netlify) — relays any Surfy path under `/proxy/*`.
+ * Does not implement Surfy API routes; only injects Bearer server-side.
  */
 export const handler: Handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -41,65 +44,50 @@ export const handler: Handler = async (event) => {
     }
 
     const upstreamPath = resolveUpstreamPath(event);
-    const url = new URL(upstreamPath, `${normalizeBaseUrl(authEnv.baseUrl)}/`);
-
-    if (event.rawQuery) {
-      url.search = event.rawQuery.startsWith('?') ? event.rawQuery : `?${event.rawQuery}`;
+    const extraHeaders: Record<string, string> = {};
+    for (const name of ['connect-protocol-version', 'connect-timeout-ms']) {
+      const value = readHeader(event, name);
+      if (value) extraHeaders[name] = value;
     }
 
-    const headers = new Headers();
-    copyRequestHeader(event, headers, 'content-type');
-    copyRequestHeader(event, headers, 'accept');
-    copyRequestHeader(event, headers, 'accept-language');
-    copyRequestHeader(event, headers, 'x-tenant');
-    copyRequestHeader(event, headers, 'x-surfy-sdk-version');
-    if (!headers.has('x-tenant')) {
-      headers.set('x-tenant', authEnv.clientId);
-    }
-
-    const incomingAuth =
-      event.headers.authorization ?? event.headers.Authorization ?? undefined;
-    if (incomingAuth && !isDemoProxyBearer(incomingAuth)) {
-      return {
-        statusCode: 400,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders() },
-        body: JSON.stringify({ error: 'Use session proxy bearer only (surfy-demo-proxy)' }),
-      };
-    }
-
-    const token = await fetchSurfyAccessToken({
-      baseUrl: authEnv.baseUrl,
-      clientId: authEnv.clientId,
-      clientSecret: authEnv.clientSecret,
-      tlsInsecure: authEnv.tlsInsecure,
-    });
-    headers.set('authorization', `Bearer ${token}`);
-
-    const init: RequestInit = {
+    const result = await forwardSurfyProxyRequest({
+      authEnv,
       method: event.httpMethod,
-      headers,
-    };
-    if (event.body && event.httpMethod !== 'GET' && event.httpMethod !== 'HEAD') {
-      init.body = event.isBase64Encoded ? Buffer.from(event.body, 'base64') : event.body;
-    }
-
-    const response = await fetch(url, init);
-    const responseBody = Buffer.from(await response.arrayBuffer());
-    const contentType = response.headers.get('content-type') ?? 'application/octet-stream';
+      upstreamPath,
+      rawQuery: event.rawQuery,
+      incomingAuthorization:
+        event.headers.authorization ?? event.headers.Authorization ?? undefined,
+      contentType: readHeader(event, 'content-type'),
+      accept: readHeader(event, 'accept'),
+      acceptLanguage: readHeader(event, 'accept-language'),
+      xTenant: readHeader(event, 'x-tenant'),
+      sdkVersion: readHeader(event, 'x-surfy-sdk-version'),
+      apiOriginHeader: readHeader(event, SURFY_DEMO_API_ORIGIN_HEADER),
+      extraHeaders,
+      body:
+        event.body && event.httpMethod !== 'GET' && event.httpMethod !== 'HEAD'
+          ? event.isBase64Encoded
+            ? Buffer.from(event.body, 'base64')
+            : event.body
+          : null,
+    });
 
     return {
-      // Never forward 502/504 — Cloudflare would replace the body.
-      statusCode: sanitizeDemoHttpStatus(response.status),
+      statusCode: result.status,
       headers: {
-        'Content-Type': contentType,
+        'Content-Type': result.contentType,
         ...corsHeaders(),
       },
-      body: responseBody.toString('base64'),
+      body: result.body.toString('base64'),
       isBase64Encoded: true,
     };
   } catch (error) {
+    const status =
+      error instanceof SurfyConfigError && error.message.includes('proxy bearer')
+        ? 400
+        : httpStatusFromDemoAuthError(error, 500);
     return {
-      statusCode: httpStatusFromDemoAuthError(error, 500),
+      statusCode: status,
       headers: { 'Content-Type': 'application/json', ...corsHeaders() },
       body: JSON.stringify(demoAuthErrorBody(error, 'Upstream proxy failed')),
     };
@@ -109,29 +97,28 @@ export const handler: Handler = async (event) => {
 function resolveUpstreamPath(event: HandlerEvent): string {
   const path = event.path;
 
-  if (path.startsWith('/api/v1/')) {
-    return path;
+  if (path.startsWith('/proxy/')) {
+    return resolveSurfyProxyUpstreamPath(path);
   }
 
   const marker = '/.netlify/functions/surfy-api-proxy/';
   if (path.startsWith(marker)) {
-    return `/api/v1/${path.slice(marker.length)}`;
+    const rest = path.slice(marker.length);
+    return resolveSurfyProxyUpstreamPath(`/proxy/${rest}`);
   }
 
-  throw new SurfyConfigError(`Unable to resolve upstream path from ${path}`);
-}
-
-function copyRequestHeader(event: HandlerEvent, headers: Headers, name: string): void {
-  const value = event.headers[name] ?? event.headers[name.toLowerCase()];
-  if (value) {
-    headers.set(name, value);
+  // Legacy rewrite /api/v1/* → treat as /proxy/api/v1/*
+  if (path.startsWith('/api/v1/')) {
+    return path;
   }
+
+  throw new SurfyConfigError(`Unable to resolve Surfy upstream path from ${path}`);
 }
 
 function corsHeaders(): Record<string, string> {
   return {
     'Access-Control-Allow-Headers':
-      'Content-Type, Authorization, x-tenant, accept-language, X-Surfy-Sdk-Version, X-Surfy-Demo-Key',
+      'Content-Type, Authorization, x-tenant, accept-language, X-Surfy-Sdk-Version, X-Surfy-Demo-Key, X-Surfy-API-Origin, Connect-Protocol-Version, Connect-Timeout-Ms',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
   };
 }

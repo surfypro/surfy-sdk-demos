@@ -1,14 +1,15 @@
 import type { SurfyLayoutKind } from '@surfy/surfy-sdk';
 import { SurfySdk } from '@surfy/surfy-sdk';
 
-export type DemoSectionId = SurfyLayoutKind;
+export type DemoLayoutSectionId = SurfyLayoutKind;
+export type DemoSectionId = DemoLayoutSectionId | 'data-api';
 
-export type DemoEntityKind = 'floor' | 'building';
+export type DemoEntityKind = 'floor' | 'building' | 'none';
 
 export interface DemoSectionConfig {
   readonly id: DemoSectionId;
   readonly label: string;
-  readonly kind: SurfyLayoutKind;
+  readonly kind: SurfyLayoutKind | null;
   readonly entityKind: DemoEntityKind;
   readonly description: string;
 }
@@ -22,20 +23,27 @@ export const DEMO_SECTIONS: readonly DemoSectionConfig[] = [
     description: "Plan d'étage SVG — zoom, sélection d'espaces, couleurs.",
   },
   {
-    id: 'floor-3d',
-    label: 'Étage 3D',
-    kind: 'floor-3d',
-    entityKind: 'floor',
-    description: "Vue 3D CubyV2 d'un étage — même API couleurs et événements.",
-  },
-  {
     id: 'building-3d',
     label: 'Bâtiment 3D',
     kind: 'building-3d',
     entityKind: 'building',
-    description: 'Vue 3D CubyV2 multi-étages — endpoint layout bâtiment.',
+    description:
+      'Vue 3D CubyV2 — multi-étages ou focus un étage via floorIds (pas de kind floor-3d).',
+  },
+  {
+    id: 'data-api',
+    label: 'API data',
+    kind: null,
+    entityKind: 'none',
+    description: 'SurfyClient.fetchEntities — app-owned typed QueryNode examples.',
   },
 ] as const;
+
+export function isLayoutSection(
+  section: DemoSectionConfig,
+): section is DemoSectionConfig & { kind: SurfyLayoutKind; entityKind: 'floor' | 'building' } {
+  return section.kind !== null && section.entityKind !== 'none';
+}
 
 export function isSectionKindRegistered(kind: SurfyLayoutKind): boolean {
   return SurfySdk.isKindRegistered(kind);
@@ -46,5 +54,7 @@ export function resolveSectionEntityId(
   floorId: number | undefined,
   buildingId: number | undefined,
 ): number | undefined {
-  return section.entityKind === 'building' ? buildingId : floorId;
+  if (section.entityKind === 'building') return buildingId;
+  if (section.entityKind === 'floor') return floorId;
+  return undefined;
 }

@@ -12,7 +12,7 @@ import {
   createInitialBuilding3dPanelState,
   WALL_MODE_OPTIONS,
 } from './building3dDemo.constants';
-import type { DemoFloor } from './fetchDemoCatalog';
+import type { DemoFloor } from '../../../fetchDemoCatalog';
 
 const DEMO_ROOM_COLOR = '#2196F3';
 

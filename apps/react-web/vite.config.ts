@@ -16,7 +16,7 @@ export default defineConfig({
       '/api/session': { target: demoServer, changeOrigin: true },
       '/api/health': { target: demoServer, changeOrigin: true },
       '/api/surfy-token': { target: demoServer, changeOrigin: true },
-      '/api/v1': { target: demoServer, changeOrigin: true },
+      '/proxy': { target: demoServer, changeOrigin: true },
     },
   },
 })

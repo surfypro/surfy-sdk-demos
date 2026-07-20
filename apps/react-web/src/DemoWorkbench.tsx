@@ -1,10 +1,19 @@
 import { useEffect, useState } from 'react';
 
+import { DataApiDemoPanel } from './demos/data/DataApiDemoPanel';
+import { Building3dDemoPanel } from './demos/layout/building-3d/Building3dDemoPanel';
+import { Floor2dDemoPanel } from './demos/layout/floor-2d/Floor2dDemoPanel';
 import type { DemoAuthMode } from './demoRoutes';
-import { DEMO_SECTIONS, resolveSectionEntityId, type DemoSectionId } from './demoSections';
+import {
+  DEMO_SECTIONS,
+  isLayoutSection,
+  type DemoSectionId,
+} from './demoSections';
 import { DemoScopePicker } from './DemoScopePicker';
-import { fetchDemoCatalog, type DemoBuilding, type DemoCatalog } from './fetchDemoCatalog';
-import { LayoutDemoPanel } from './LayoutDemoPanel';
+import { fetchDemoCatalog, type DemoBuilding, type DemoCatalog, type DemoFloor } from './fetchDemoCatalog';
+import { useDemoI18n } from './i18n/DemoI18nProvider';
+
+const EMPTY_FLOORS: readonly DemoFloor[] = [];
 
 function pickInitialScope(buildings: readonly DemoBuilding[]): {
   buildingId: number | undefined;
@@ -29,10 +38,9 @@ interface DemoWorkbenchProps {
 /**
  * Shared demo UI (React web + RN WebView embed).
  * Section comes from the URL (`/:authMode/:host/:section`).
- * API mode: session cookie + server proxy (no Surfy JWT in the browser).
- * OAuth mode: placeholder until Entra OBO / delegate-token ships.
  */
 export function DemoWorkbench({ embedded = false, authMode, activeSection }: DemoWorkbenchProps) {
+  const { t } = useDemoI18n();
   const [catalog, setCatalog] = useState<DemoCatalog | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -74,6 +82,9 @@ export function DemoWorkbench({ embedded = false, authMode, activeSection }: Dem
 
   const selectedBuilding = catalog?.buildings.find((b) => b.id === buildingId);
   const scopeVariant = activeSection === 'building-3d' ? 'building' : 'floor';
+  const activeDemoSection = DEMO_SECTIONS.find((item) => item.id === activeSection);
+  const layoutSection =
+    activeDemoSection && isLayoutSection(activeDemoSection) ? activeDemoSection : null;
 
   const onBuildingChange = (nextBuildingId: number) => {
     setBuildingId(nextBuildingId);
@@ -85,12 +96,7 @@ export function DemoWorkbench({ embedded = false, authMode, activeSection }: Dem
     return (
       <div className="demo-workbench" data-testid="demo-workbench-oauth">
         <div className="demo-section__unavailable" data-testid="oauth-coming-soon">
-          <p>
-            Mode OAuth / Entra OBO (token utilisateur → droits Surfy) — à venir. Deux app
-            registrations Entra (app cliente ↔ Surfy), échange type <code>openid/set-token</code>{' '}
-            puis JWT pour <code>setAccessTokenProvider</code>.
-          </p>
-          <p>Pour l&apos;instant, utilisez le mode API (session serveur + proxy).</p>
+          <p>{t('oauth.comingSoon')}</p>
         </div>
       </div>
     );
@@ -101,27 +107,22 @@ export function DemoWorkbench({ embedded = false, authMode, activeSection }: Dem
       className={`demo-workbench${embedded ? ' demo-workbench--embedded' : ''}`}
       data-testid="demo-workbench"
     >
-      {!embedded ? (
-        <p className="page__intro demo-workbench__intro">
-          Mode API : session HttpOnly + proxy <code>/api/v1</code> (le JWT Surfy ne quitte pas le
-          serveur). Bâtiments de référence uniquement.
-        </p>
+      {!embedded ? <p className="page__intro demo-workbench__intro">{t('workbench.intro')}</p> : null}
+
+      {layoutSection && catalogLoading ? (
+        <p data-testid="demo-catalog-loading">{t('workbench.loading')}</p>
       ) : null}
 
-      {catalogLoading ? (
-        <p data-testid="demo-catalog-loading">Chargement des bâtiments…</p>
-      ) : null}
-
-      {catalogError ? (
+      {layoutSection && catalogError ? (
         <p className="demo-catalog-error" data-testid="demo-catalog-error" role="alert">
           {catalogError}
         </p>
       ) : null}
 
-      {catalog ? (
+      {catalog && layoutSection ? (
         <>
           <p className="demo-tenant" data-testid="demo-tenant">
-            Tenant: <code>{catalog.tenant}</code> · session API (proxy)
+            {t('workbench.tenant')}: <code>{catalog.tenant}</code> · {t('workbench.session')}
           </p>
           <DemoScopePicker
             buildings={catalog.buildings}
@@ -133,23 +134,35 @@ export function DemoWorkbench({ embedded = false, authMode, activeSection }: Dem
             disabled={catalogLoading}
           />
           {scopeVariant === 'floor' && selectedBuilding && selectedBuilding.floors.length === 0 ? (
-            <p className="demo-catalog-hint">Ce bâtiment n&apos;a pas d&apos;étage.</p>
+            <p className="demo-catalog-hint">{t('workbench.noFloors')}</p>
           ) : null}
         </>
       ) : null}
 
-      {catalog
-        ? DEMO_SECTIONS.map((section) => (
-            <LayoutDemoPanel
-              key={section.id}
-              section={section}
-              active={activeSection === section.id}
-              tenant={catalog.tenant}
-              entityId={resolveSectionEntityId(section, floorId, buildingId)}
-              buildingFloors={selectedBuilding?.floors}
-            />
-          ))
-        : null}
+      {activeSection === 'data-api' ? <DataApiDemoPanel active /> : null}
+
+      {catalog && layoutSection?.id === 'floor-2d' ? (
+        <Floor2dDemoPanel
+          key="floor-2d"
+          active
+          tenant={catalog.tenant}
+          floorId={floorId}
+          title={layoutSection.label}
+          description={layoutSection.description}
+        />
+      ) : null}
+
+      {catalog && layoutSection?.id === 'building-3d' ? (
+        <Building3dDemoPanel
+          key="building-3d"
+          active
+          tenant={catalog.tenant}
+          buildingId={buildingId}
+          buildingFloors={selectedBuilding?.floors ?? EMPTY_FLOORS}
+          title={layoutSection.label}
+          description={layoutSection.description}
+        />
+      ) : null}
     </div>
   );
 }

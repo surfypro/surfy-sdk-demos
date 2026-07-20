@@ -14,10 +14,12 @@ import {
 import { DemoThemeProvider } from './DemoThemeContext';
 import { DemoThemeSwitcher } from './DemoThemeSwitcher';
 import { DemoWorkbench } from './DemoWorkbench';
+import { DemoI18nProvider, useDemoI18n } from './i18n/DemoI18nProvider';
+import { DemoLocaleSwitcher } from './i18n/DemoLocaleSwitcher';
 import { NativeWebViewSimulator } from './NativeWebViewSimulator';
 
-function authModeLabel(mode: DemoAuthMode): string {
-  return mode === 'api' ? 'API (serveur)' : 'OAuth / Entra';
+function authModeLabel(mode: DemoAuthMode, t: ReturnType<typeof useDemoI18n>['t']): string {
+  return mode === 'api' ? t('auth.api') : t('auth.oauth');
 }
 
 function DemoNavLink(props: {
@@ -41,6 +43,7 @@ function DemoNavLink(props: {
 }
 
 function DemoAppShell() {
+  const { t } = useDemoI18n();
   const params = useParams();
   const [searchParams] = useSearchParams();
   const embedded = searchParams.get('embed') === '1';
@@ -63,27 +66,27 @@ function DemoAppShell() {
   return (
     <main className="page">
       <header className="page__header">
-        <h1>Surfy SDK Demo</h1>
-        <DemoThemeSwitcher />
+        <h1>{t('app.title')}</h1>
+        <div className="page__header-actions">
+          <DemoLocaleSwitcher />
+          <DemoThemeSwitcher />
+        </div>
       </header>
-      <p className="page__intro page__intro--compact">
-        Routes : <code>/api|oauth/react-web|react-native/floor-2d|floor-3d|building-3d</code>. Mode
-        API : session HttpOnly + proxy <code>/api/v1</code>.
-      </p>
+      <p className="page__intro page__intro--compact">{t('app.routesHint')}</p>
 
-      <nav className="host-tabs" role="tablist" aria-label="Mode d'authentification">
+      <nav className="host-tabs" role="tablist" aria-label={t('nav.auth')}>
         {DEMO_AUTH_MODES.map((mode) => (
           <DemoNavLink
             key={mode}
             to={buildDemoPath(mode, host, section)}
             testId={`auth-mode-${mode}`}
           >
-            {authModeLabel(mode)}
+            {authModeLabel(mode, t)}
           </DemoNavLink>
         ))}
       </nav>
 
-      <nav className="host-tabs" role="tablist" aria-label="Hôte de démo">
+      <nav className="host-tabs" role="tablist" aria-label={t('nav.host')}>
         {DEMO_HOSTS.map((item) => (
           <DemoNavLink
             key={item.id}
@@ -95,27 +98,54 @@ function DemoAppShell() {
         ))}
       </nav>
 
-      <nav className="demo-tabs" role="tablist" aria-label="Composants SDK">
-        {DEMO_SECTIONS.map((item) => (
-          <NavLink
-            key={item.id}
-            to={buildDemoPath(authMode, host, item.id)}
-            role="tab"
-            data-testid={`demo-tab-${item.id}`}
-            className={({ isActive }) =>
-              `demo-tabs__tab${isActive ? ' demo-tabs__tab--active' : ''}`
-            }
-          >
-            {item.label}
-          </NavLink>
-        ))}
-      </nav>
+      <div className="demo-shell">
+        <aside className="demo-api-nav" aria-label={t('nav.apiFamilies')}>
+          <div className="demo-api-nav__group">
+            <h2 className="demo-api-nav__title">{t('nav.apiComponents')}</h2>
+            <nav className="demo-api-nav__list" role="tablist" aria-label={t('nav.apiComponents')}>
+              {DEMO_SECTIONS.filter((item) => item.id !== 'data-api').map((item) => (
+                <NavLink
+                  key={item.id}
+                  to={buildDemoPath(authMode, host, item.id)}
+                  role="tab"
+                  data-testid={`demo-tab-${item.id}`}
+                  className={({ isActive }) =>
+                    `demo-api-nav__link${isActive ? ' demo-api-nav__link--active' : ''}`
+                  }
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
+          <div className="demo-api-nav__group">
+            <h2 className="demo-api-nav__title">{t('nav.apiData')}</h2>
+            <nav className="demo-api-nav__list" role="tablist" aria-label={t('nav.apiData')}>
+              {DEMO_SECTIONS.filter((item) => item.id === 'data-api').map((item) => (
+                <NavLink
+                  key={item.id}
+                  to={buildDemoPath(authMode, host, item.id)}
+                  role="tab"
+                  data-testid={`demo-tab-${item.id}`}
+                  className={({ isActive }) =>
+                    `demo-api-nav__link${isActive ? ' demo-api-nav__link--active' : ''}`
+                  }
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
+        </aside>
 
-      {host === 'react-web' ? (
-        <DemoWorkbench authMode={authMode} activeSection={section} />
-      ) : (
-        <NativeWebViewSimulator authMode={authMode} section={section} />
-      )}
+        <div className="demo-shell__main">
+          {host === 'react-web' ? (
+            <DemoWorkbench authMode={authMode} activeSection={section} />
+          ) : (
+            <NativeWebViewSimulator authMode={authMode} section={section} />
+          )}
+        </div>
+      </div>
     </main>
   );
 }
@@ -124,8 +154,10 @@ export type { DemoAuthMode, DemoHostId };
 
 export default function App() {
   return (
-    <DemoThemeProvider>
-      <DemoAppShell />
-    </DemoThemeProvider>
+    <DemoI18nProvider>
+      <DemoThemeProvider>
+        <DemoAppShell />
+      </DemoThemeProvider>
+    </DemoI18nProvider>
   );
 }

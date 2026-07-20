@@ -10,8 +10,16 @@ if [[ ! -f "${SOURCE_DIR}/index.js" ]]; then
   exit 1
 fi
 
+if [[ ! -f "${SOURCE_DIR}/client.js" ]]; then
+  echo "Missing SDK client bundle at ${SOURCE_DIR}/client.js"
+  echo "Run pnpm build:sdk in wt-ado-389-surfy-sdk first."
+  exit 1
+fi
+
 mkdir -p "${TARGET_DIR}"
 cp "${SOURCE_DIR}/index.js" "${TARGET_DIR}/index.js"
 cp "${SOURCE_DIR}/index.d.ts" "${TARGET_DIR}/index.d.ts"
+cp "${SOURCE_DIR}/client.js" "${TARGET_DIR}/client.js"
+cp "${SOURCE_DIR}/client.d.ts" "${TARGET_DIR}/client.d.ts"
 
-echo "Synced local SDK bundle to ${TARGET_DIR}"
+echo "Synced local SDK bundle to ${TARGET_DIR} (index + client)"

@@ -4,15 +4,14 @@ import {
   attachBrowserErrorCollector,
   BUILDING_3D_DEMO_URL,
   DEFAULT_DEMO_URL,
-  FLOOR_3D_DEMO_URL,
 } from './helpers';
 
 const hasSdkCredentials = hasSurfySdkCredentials();
 
 const DEEP_LINKS = [
   DEFAULT_DEMO_URL,
-  FLOOR_3D_DEMO_URL,
   BUILDING_3D_DEMO_URL,
+  '/api/react-web/data-api',
   '/oauth/react-web/floor-2d',
   '/api/react-native/building-3d',
 ] as const;

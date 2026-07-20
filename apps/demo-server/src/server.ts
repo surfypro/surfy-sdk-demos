@@ -4,14 +4,16 @@ import {
   demoAuthErrorBody,
   DemoGateError,
   fetchSurfyAccessToken,
+  forwardSurfyProxyRequest,
   httpStatusFromDemoAuthError,
-  isDemoProxyBearer,
   loadSurfyDemoAuthEnv,
-  normalizeBaseUrl,
-  sanitizeDemoHttpStatus,
+  resolveSurfyProxyUpstreamPath,
+  SurfyConfigError,
   type SurfyDemoAuthEnv,
   SURFY_DEMO_PROXY_BEARER,
+  SURFY_DEMO_PROXY_PATH_PREFIX,
   SURFY_DEMO_SESSION_COOKIE,
+  SURFY_DEMO_API_ORIGIN_HEADER,
 } from '@surfy/surfy-demo-auth';
 
 type SessionResponse = {
@@ -39,6 +41,10 @@ function getAuthEnv(): SurfyDemoAuthEnv {
 function sendAuthError(res: Response, error: unknown, fallbackMessage: string): void {
   if (error instanceof DemoGateError) {
     res.status(error.status).json(demoAuthErrorBody(error, error.message));
+    return;
+  }
+  if (error instanceof SurfyConfigError && error.message.includes('proxy bearer')) {
+    res.status(400).json(demoAuthErrorBody(error, error.message));
     return;
   }
   res.status(httpStatusFromDemoAuthError(error, 500)).json(demoAuthErrorBody(error, fallbackMessage));
@@ -117,7 +123,6 @@ app.get('/api/surfy-token', async (req: Request, res: Response) => {
     res.json({
       tenant: authEnv.clientId,
       authMode: 'api',
-      // Intentionally no `token` — clients must use the proxy session.
       proxyBearer: SURFY_DEMO_PROXY_BEARER,
     });
   } catch (error) {
@@ -130,61 +135,50 @@ app.get('/api/health', (_req: Request, res: Response<{ status: 'ok' }>) => {
 });
 
 /**
- * Same-origin Surfy proxy: injects API Bearer from connection string.
- * Browser may send Authorization: Bearer surfy-demo-proxy (SDK) — never the real JWT.
+ * Unique Surfy proxy — does not implement Surfy routes.
+ * Browser: `/proxy/api/v1/...` (+ optional `?surfyApiOrigin=` / `X-Surfy-API-Origin`).
+ * Server injects Bearer from SURFY_CONNECTION_STRING and forwards method/query/body.
  */
-app.use('/api/v1', requireSession, async (req: Request, res: Response) => {
+app.use(SURFY_DEMO_PROXY_PATH_PREFIX, requireSession, async (req: Request, res: Response) => {
   try {
     const authEnv = getAuthEnv();
-    const upstreamPath = req.originalUrl; // includes /api/v1/...
-    const url = new URL(upstreamPath, `${normalizeBaseUrl(authEnv.baseUrl)}/`);
+    const upstreamPath = resolveSurfyProxyUpstreamPath(
+      `${SURFY_DEMO_PROXY_PATH_PREFIX}${req.url.split('?')[0] || ''}`,
+    );
+    const rawQuery = req.url.includes('?') ? req.url.slice(req.url.indexOf('?') + 1) : undefined;
 
-    const headers = new Headers();
-    const contentType = req.header('content-type');
-    if (contentType) headers.set('content-type', contentType);
-    const accept = req.header('accept');
-    if (accept) headers.set('accept', accept);
-    const acceptLanguage = req.header('accept-language');
-    if (acceptLanguage) headers.set('accept-language', acceptLanguage);
-    const xTenant = req.header('x-tenant') ?? authEnv.clientId;
-    headers.set('x-tenant', xTenant);
-    const sdkVersion = req.header('x-surfy-sdk-version');
-    if (sdkVersion) headers.set('x-surfy-sdk-version', sdkVersion);
-
-    const incomingAuth = req.header('authorization');
-    if (isDemoProxyBearer(incomingAuth)) {
-      const token = await resolveSurfyBearer(authEnv);
-      headers.set('authorization', `Bearer ${token}`);
-    } else if (incomingAuth) {
-      // Reject leaking real tokens from the browser in API demo mode
-      res.status(400).json({ error: 'Use session proxy bearer only (surfy-demo-proxy)' });
-      return;
-    } else {
-      const token = await resolveSurfyBearer(authEnv);
-      headers.set('authorization', `Bearer ${token}`);
-    }
-
-    const init: RequestInit = {
-      method: req.method,
-      headers,
-    };
+    const chunks: Buffer[] = [];
     if (req.method !== 'GET' && req.method !== 'HEAD') {
-      const chunks: Buffer[] = [];
       for await (const chunk of req) {
         chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
       }
-      if (chunks.length > 0) {
-        init.body = Buffer.concat(chunks);
-      }
     }
 
-    const response = await fetch(url, init);
-    const body = Buffer.from(await response.arrayBuffer());
-    // Never forward 502/504 — Cloudflare would replace the body.
-    res.status(sanitizeDemoHttpStatus(response.status));
-    const ct = response.headers.get('content-type');
-    if (ct) res.setHeader('Content-Type', ct);
-    res.send(body);
+    const extraHeaders: Record<string, string> = {};
+    for (const name of ['connect-protocol-version', 'connect-timeout-ms']) {
+      const value = req.header(name);
+      if (value) extraHeaders[name] = value;
+    }
+
+    const result = await forwardSurfyProxyRequest({
+      authEnv,
+      method: req.method,
+      upstreamPath,
+      rawQuery,
+      incomingAuthorization: req.header('authorization'),
+      contentType: req.header('content-type'),
+      accept: req.header('accept'),
+      acceptLanguage: req.header('accept-language'),
+      xTenant: req.header('x-tenant'),
+      sdkVersion: req.header('x-surfy-sdk-version'),
+      apiOriginHeader: req.header(SURFY_DEMO_API_ORIGIN_HEADER),
+      extraHeaders,
+      body: chunks.length > 0 ? Buffer.concat(chunks) : null,
+    });
+
+    res.status(result.status);
+    res.setHeader('Content-Type', result.contentType);
+    res.send(result.body);
   } catch (error) {
     sendAuthError(res, error, 'Upstream proxy failed');
   }
@@ -192,5 +186,7 @@ app.use('/api/v1', requireSession, async (req: Request, res: Response) => {
 
 app.listen(port, () => {
   console.log(`Surfy demo server listening on http://localhost:${port}`);
-  console.log(`  session: GET /api/session  |  proxy: /api/v1/* (Bearer injected server-side)`);
+  console.log(
+    `  session: GET /api/session  |  proxy: ${SURFY_DEMO_PROXY_PATH_PREFIX}/api/v1/* (Bearer injected)`,
+  );
 });

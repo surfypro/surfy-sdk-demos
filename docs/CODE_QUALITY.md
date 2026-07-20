@@ -58,7 +58,7 @@ type SurfyLayout3dOptions = { floorSpace?: number; … };
 
 | Couche | OK | Interdit |
 |--------|----|----------|
-| UI démo | `SurfySdk.mount`, `setOptions`, `setRoomColors`, `updateRoom`, `fitToView` | Accès Cuby, jotai Surfy, `cubyStore`, `document.createElement` pour les layouts |
+| UI démo | `SurfySdk.mountFloor2d` / `mountBuilding3d`, `setOptions`, `setRoomColors`, `updateRoom`, `fitToView` | Accès Cuby, jotai Surfy, `cubyStore`, `document.createElement` pour les layouts |
 | `demo-server` / Netlify functions | `parseSurfyConnectionString`, proxy `/api/v1` | Exposer `clientSecret` ou JWT Surfy au browser |
 | Bundle syncé | consommer `@surfy/surfy-sdk` | Patcher `packages/surfy-sdk` à la main |
 
@@ -71,16 +71,23 @@ Cibles indicatives :
 | Panel / page React | ~250 lignes | Extraire `*Controls.tsx`, `*helpers.ts` |
 | Handler / effect lourd | ~80 lignes | Extraire helpers purs + tests si logique non triviale |
 
-Exemple de découpage pour le bâtiment 3D :
+Exemple de découpage layout demos :
 
 ```text
-LayoutDemoPanel.tsx              — montage élément + events + actions couleurs
-Building3dDemoControls.tsx       — setOptions (étages, wallMode, structure, navigation, updateRoom)
-building3dDemo.constants.ts      — défauts + options initiales
-demoLayoutElement.ts             — waitForDemoRoomId via SurfyLayout
+demos/layout/
+  floor-2d/Floor2dDemoPanel.tsx       — mountFloor2d seulement
+  building-3d/Building3dDemoPanel.tsx — mountBuilding3d seulement
+  building-3d/Building3dDemoControls.tsx
+  building-3d/building3dDemo.constants.ts
+  shared/LayoutDemoShell.tsx          — chrome section
+  shared/LayoutDemoCommonActions.tsx  — couleurs / blink / clear
+  shared/useLayoutDemoChrome.ts       — events, theme, snippets
+  shared/layoutDemo.constants.ts
+  actions/*                           — boutons unitaires
 
-demoApiSnippets.ts               — snippets copiables uniquement
-demoThemes.ts / useDemoTheme.ts  — presets thème (SurfyThemeOptions)
+demoLayoutElement.ts                  — waitForDemoRoomId via SurfyLayout
+demoApiSnippets.ts                    — snippets copiables
+demoThemes.ts / useDemoTheme.ts       — presets thème
 ```
 
 ### 4. Hooks React
@@ -137,7 +144,7 @@ Règles Cursor monolithe : `.cursor/rules/sonar-coding-style.mdc`, `sonar-local.
 
 ## Évolutions souhaitables
 
-1. Découper `LayoutDemoPanel.tsx` — **fait** (`Building3dDemoControls`, `demoLayoutElement`, `building3dDemo.constants`).
+1. Découper layout demos en panels 2D / 3D séparés — **fait** (`Floor2dDemoPanel`, `Building3dDemoPanel`, `shared/`).
 2. Types SDK importés depuis `@surfy/surfy-sdk` — **fait** (plus de doublons locaux).
 3. Script racine `pnpm quality` — **fait**.
 4. Renforcer oxlint (règles hooks / unused / eqeqeq) — **fait** (`.oxlintrc.json`) ; type-aware (`oxlint-tsgolint`) en option ultérieure.

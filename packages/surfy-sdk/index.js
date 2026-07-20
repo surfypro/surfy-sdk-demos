@@ -38,11 +38,9 @@ var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require
 //#region src/surfy-sdk/constants.ts
 /** Published SDK semver — bump on public API changes. */
 var SURFY_SDK_VERSION = "0.2.0";
-/** 2D floor layout Web Component (phase 1b). */
+/** 2D floor layout Web Component. */
 var SURFY_FLOOR_LAYOUT_2D_TAG = "surfy-floor-layout-2d";
-/** 3D floor layout Web Component — CubyV2 (phase 2). */
-var SURFY_FLOOR_LAYOUT_3D_TAG = "surfy-floor-layout-3d";
-/** 3D building layout Web Component — CubyV2 (phase 2). */
+/** 3D building layout Web Component — CubyV2 (multi-floor or single-floor focus). */
 var SURFY_BUILDING_LAYOUT_3D_TAG = "surfy-building-layout-3d";
 var LAYOUT_FLOOR_DATA_ROUTE = "/api/v1/layout/floor/data";
 var LAYOUT_BUILDING_DATA_ROUTE = "/api/v1/layout/buildings/data";
@@ -63712,16 +63710,19 @@ function animateCameraPosition(cuby, targetPosition, center, onComplete) {
 	tween.onStop(finalize);
 	cuby.camera.lookAt(center);
 }
-function createFitToViewMetrics(cuby, bbox, center) {
+/** Camera pull-back distance for a world bbox (unit tests + focus helpers). */
+function computeCubyFitDistanceWithOffset(bbox, camera) {
 	const size = bbox.getSize(new Vector3(0, 0, 0));
-	const { camera } = cuby;
 	const fitOffset = 1.05;
 	const zDistance = Math.abs(bbox.max.z);
 	const fitWidthDistance1 = (zDistance + size.x / (2 * Math.atan(Math.PI * camera.fov / 360))) / camera.aspect;
 	const fitHeightDistance2 = zDistance + size.y / (2 * Math.atan(Math.PI * camera.fov / 360));
+	return fitOffset * (size.x / size.y > camera.aspect ? fitWidthDistance1 : fitHeightDistance2);
+}
+function createFitToViewMetrics(cuby, bbox, center) {
 	return {
 		center,
-		distanceWithOffset: fitOffset * (size.x / size.y > camera.aspect ? fitWidthDistance1 : fitHeightDistance2),
+		distanceWithOffset: computeCubyFitDistanceWithOffset(bbox, cuby.camera),
 		radius: bbox.getBoundingSphere(new Sphere()).radius,
 		zoomMode: cuby.getCurrentZoomMode()
 	};
@@ -63733,26 +63734,19 @@ function resolveFitToViewBbox(selectedFloorScenes, cuby) {
 	if (validScenes.length === 0) return;
 	return mergeObjects3dToBox(validScenes.map(({ shapes }) => shapes));
 }
-function cubyFitToView(cuby, moveCamera) {
-	const selectedFloorScenes = getAllSelectedFloorScenes(cuby);
-	const scenes = selectedFloorScenes.length > 0 ? selectedFloorScenes.flatMap(({ shapes }) => [shapes]) : [cuby.standaloneShapes];
-	const bbox = selectedFloorScenes.length > 0 ? resolveFitToViewBbox(selectedFloorScenes, cuby) : mergeObjects3dToBox(scenes);
-	if (!bbox) {
-		consoleLog("Impossible to compute bounding box for selected floor scenes: no valid floor bbox");
-		return;
-	}
+/**
+* Fit the Cuby camera to an arbitrary world-space bbox (floors, room, workplace).
+* Prefer {@link cubyFitToView} for the full selected-floors scene.
+*/
+function cubyFitCameraToBbox(cuby, bbox, moveCamera) {
 	const validity = getBox3Validity(bbox);
 	if (!validity.isValid) {
-		consoleLog("Impossible to compute bounding box for selected floor scenes:", {
+		consoleLog("Impossible to compute bounding box for camera fit:", {
 			...validity,
 			bbox: {
 				min: bbox.min,
 				max: bbox.max
-			},
-			selectedFloorScenes: selectedFloorScenes.map((fs) => ({
-				floorId: fs.floorId,
-				shapesChildrenCount: fs.shapes.children.length
-			}))
+			}
 		});
 		return;
 	}
@@ -63777,18 +63771,44 @@ function cubyFitToView(cuby, moveCamera) {
 		controlAfterFit[initialControlsType]?.(controlContext);
 		cuby.controls.update();
 	};
-	if (hasStartupConfig) finalizeFit();
-	else {
-		applyCameraUpVector(cuby, metrics.zoomMode);
-		const targetY = resolveTargetY(initialControlsType, controlContext);
-		const newCameraPosition = new Vector3(center.x, targetY, -metrics.distanceWithOffset);
-		if (moveCamera) animateCameraPosition(cuby, newCameraPosition, center, finalizeFit);
-		else {
-			cuby.camera.position.copy(newCameraPosition);
-			cuby.camera.lookAt(center);
-			finalizeFit();
-		}
+	if (hasStartupConfig) {
+		finalizeFit();
+		return;
 	}
+	applyCameraUpVector(cuby, metrics.zoomMode);
+	const targetY = resolveTargetY(initialControlsType, controlContext);
+	const newCameraPosition = new Vector3(center.x, targetY, -metrics.distanceWithOffset);
+	if (moveCamera) animateCameraPosition(cuby, newCameraPosition, center, finalizeFit);
+	else {
+		cuby.camera.position.copy(newCameraPosition);
+		cuby.camera.lookAt(center);
+		finalizeFit();
+	}
+}
+function cubyFitToView(cuby, moveCamera) {
+	const selectedFloorScenes = getAllSelectedFloorScenes(cuby);
+	const scenes = selectedFloorScenes.length > 0 ? selectedFloorScenes.flatMap(({ shapes }) => [shapes]) : [cuby.standaloneShapes];
+	const bbox = selectedFloorScenes.length > 0 ? resolveFitToViewBbox(selectedFloorScenes, cuby) : mergeObjects3dToBox(scenes);
+	if (!bbox) {
+		consoleLog("Impossible to compute bounding box for selected floor scenes: no valid floor bbox");
+		return;
+	}
+	const validity = getBox3Validity(bbox);
+	if (!validity.isValid) {
+		consoleLog("Impossible to compute bounding box for selected floor scenes:", {
+			...validity,
+			bbox: {
+				min: bbox.min,
+				max: bbox.max
+			},
+			selectedFloorScenes: selectedFloorScenes.map((fs) => ({
+				floorId: fs.floorId,
+				shapesChildrenCount: fs.shapes.children.length
+			}))
+		});
+		return;
+	}
+	cubyFitCameraToBbox(cuby, bbox, moveCamera);
 }
 //#endregion
 //#region src/front/3d/engine/cuby.camera.ts
@@ -109761,18 +109781,6 @@ function useBuildingOptional(buildingId) {
 	const store = useBuildings();
 	if (buildingId) return store.get(buildingId);
 }
-function setBuildingInMasterDataStore(e) {
-	const currentCompany = getCurrentCompany();
-	const jotaiStore = getDefaultStore();
-	const atomInstance = atom_$31(currentCompany.name);
-	const currentStore = jotaiStore.get(atomInstance);
-	const newStore = currentStore ? new Map(currentStore) : /* @__PURE__ */ new Map();
-	newStore.set(e.id, {
-		...newStore.get(e.id),
-		...e
-	});
-	jotaiStore.set(atomInstance, newStore);
-}
 var buildingStoreAtomFamily, atom_$31;
 var init_building_state_generated = __esmMin((() => {
 	init_esm();
@@ -110003,18 +110011,6 @@ function getItemTypes() {
 	const store = getDefaultStore().get(atom_$28(currentCompany.name));
 	if (!store) throw new Error("ItemTypeStore is not loaded (get)");
 	return store;
-}
-function setItemTypeInMasterDataStore(e) {
-	const currentCompany = getCurrentCompany();
-	const jotaiStore = getDefaultStore();
-	const atomInstance = atom_$28(currentCompany.name);
-	const currentStore = jotaiStore.get(atomInstance);
-	const newStore = currentStore ? new Map(currentStore) : /* @__PURE__ */ new Map();
-	newStore.set(e.id, {
-		...newStore.get(e.id),
-		...e
-	});
-	jotaiStore.set(atomInstance, newStore);
 }
 var itemTypeStoreAtomFamily, atom_$28;
 var init_itemType_state_generated = __esmMin((() => {
@@ -110478,18 +110474,6 @@ function getWorkplaceTypes() {
 	if (!store) throw new Error("WorkplaceTypeStore is not loaded (get)");
 	return store;
 }
-function setWorkplaceTypeInMasterDataStore(e) {
-	const currentCompany = getCurrentCompany();
-	const jotaiStore = getDefaultStore();
-	const atomInstance = atom_$27(currentCompany.name);
-	const currentStore = jotaiStore.get(atomInstance);
-	const newStore = currentStore ? new Map(currentStore) : /* @__PURE__ */ new Map();
-	newStore.set(e.id, {
-		...newStore.get(e.id),
-		...e
-	});
-	jotaiStore.set(atomInstance, newStore);
-}
 var workplaceTypeStoreAtomFamily, atom_$27;
 var init_workplaceType_state_generated = __esmMin((() => {
 	init_esm();
@@ -110586,18 +110570,6 @@ function useRoomTypes() {
 function useRoomTypeOptional(roomTypeId) {
 	const store = useRoomTypes();
 	if (roomTypeId) return store.get(roomTypeId);
-}
-function setRoomTypeInMasterDataStore(e) {
-	const currentCompany = getCurrentCompany();
-	const jotaiStore = getDefaultStore();
-	const atomInstance = atom_$25(currentCompany.name);
-	const currentStore = jotaiStore.get(atomInstance);
-	const newStore = currentStore ? new Map(currentStore) : /* @__PURE__ */ new Map();
-	newStore.set(e.id, {
-		...newStore.get(e.id),
-		...e
-	});
-	jotaiStore.set(atomInstance, newStore);
 }
 var roomTypeStoreAtomFamily, atom_$25;
 var init_roomType_state_generated = __esmMin((() => {
@@ -110928,18 +110900,6 @@ function getFloor(floorId) {
 	if (!e) throw new Error(`Floor is missing in store for id : ${floorId}`);
 	return e;
 }
-function setFloorInMasterDataStore(e) {
-	const currentCompany = getCurrentCompany();
-	const jotaiStore = getDefaultStore();
-	const atomInstance = atom_$18(currentCompany.name);
-	const currentStore = jotaiStore.get(atomInstance);
-	const newStore = currentStore ? new Map(currentStore) : /* @__PURE__ */ new Map();
-	newStore.set(e.id, {
-		...newStore.get(e.id),
-		...e
-	});
-	jotaiStore.set(atomInstance, newStore);
-}
 var floorStoreAtomFamily, atom_$18;
 var init_floor_state_generated = __esmMin((() => {
 	init_esm();
@@ -111004,18 +110964,6 @@ function getMapScale(mapScaleId) {
 	const e = getMapScales().get(mapScaleId);
 	if (!e) throw new Error(`MapScale is missing in store for id : ${mapScaleId}`);
 	return e;
-}
-function setMapScaleInMasterDataStore(e) {
-	const currentCompany = getCurrentCompany();
-	const jotaiStore = getDefaultStore();
-	const atomInstance = atom_$17(currentCompany.name);
-	const currentStore = jotaiStore.get(atomInstance);
-	const newStore = currentStore ? new Map(currentStore) : /* @__PURE__ */ new Map();
-	newStore.set(e.id, {
-		...newStore.get(e.id),
-		...e
-	});
-	jotaiStore.set(atomInstance, newStore);
 }
 var mapScaleStoreAtomFamily, atom_$17, init_mapScale_state_generated = __esmMin((() => {
 	init_esm();
@@ -111219,18 +111167,6 @@ function useRoomPointSegmentType(roomPointSegmentTypeId) {
 function useRoomPointSegmentTypeOptional(roomPointSegmentTypeId) {
 	const store = useRoomPointSegmentTypes();
 	if (roomPointSegmentTypeId) return store.get(roomPointSegmentTypeId);
-}
-function setRoomPointSegmentTypeInMasterDataStore(e) {
-	const currentCompany = getCurrentCompany();
-	const jotaiStore = getDefaultStore();
-	const atomInstance = atom_$13(currentCompany.name);
-	const currentStore = jotaiStore.get(atomInstance);
-	const newStore = currentStore ? new Map(currentStore) : /* @__PURE__ */ new Map();
-	newStore.set(e.id, {
-		...newStore.get(e.id),
-		...e
-	});
-	jotaiStore.set(atomInstance, newStore);
 }
 var roomPointSegmentTypeStoreAtomFamily, atom_$13;
 var init_roomPointSegmentType_state_generated = __esmMin((() => {
@@ -111884,6 +111820,12 @@ var tenantMasterDataTypes = new Set(["by-tenant", "by-tenant-content-role"]);
 */
 function getMasterDataTenantLoaders() {
 	return getAllMasterDataLoaders().filter((loader) => tenantMasterDataTypes.has(loader.masterDataType));
+}
+/**
+* Get all public master data loaders (not tenant-dependent)
+*/
+function getMasterDataPublicLoaders() {
+	return getAllMasterDataLoaders().filter((loader) => loader.masterDataType === "public");
 }
 //#endregion
 //#region src/core/metaModel/propertyType/propertyTypes.ts
@@ -121235,13 +121177,16 @@ function updateRoomElementAccordingToColorContext(wallMode, room, context, selec
 		room.element.material.opacity = 1;
 		room.element.material.transparent = false;
 		colorCubyShape(room.element.material, getShadowColor(color));
-	} else {
-		if (wallMode === "cuby" || wallMode === "cuby-reality-selected" || wallMode === "no-wall-selected") {
-			room.element.material.opacity = .25;
-			room.element.material.transparent = true;
-		}
-		colorCubyShape(room.element.material, getShadowColor(cubyColors.greyGround));
+		return;
 	}
+	if (wallMode === "cuby" || wallMode === "cuby-reality-selected" || wallMode === "no-wall-selected") {
+		room.element.material.opacity = .25;
+		room.element.material.transparent = true;
+	} else {
+		room.element.material.opacity = 1;
+		room.element.material.transparent = false;
+	}
+	colorCubyShape(room.element.material, getShadowColor(cubyColors.greyGround));
 }
 //#endregion
 //#region src/front/3d/room/cuby.roomLabels.manager.ts
@@ -122980,8 +122925,72 @@ function useCubyFloorLabels(contextId) {
 //#region src/front/3d/building/FloorSpaceSlider.state.ts
 init_esm();
 init_dist();
-var floorSpace = 240;
-var floorSpaceSliderAtomFamily = atomFamily((_contextId) => atom(floorSpace));
+var floorSpaceSliderAtomFamily = atomFamily((_contextId) => atom(240));
+//#endregion
+//#region src/core/objectTypes/mapScale.distance.helper.ts
+/**
+* Convert real-world meters to layout / SVG / Cuby units using mapScale.ratio
+* (meters per layout pixel).
+*/
+function metersToLayoutDistance(meters, mapRatio) {
+	if (!(mapRatio > 0) || !Number.isFinite(meters)) return 0;
+	return meters / mapRatio;
+}
+/**
+* Layout margin on each side of an entity bbox so the framed view covers a disk
+* of the given diameter around the entity (padding = diameter / 2).
+*/
+function layoutMarginFromDiameterMeters(diameterMeters, mapRatio) {
+	if (!(diameterMeters > 0)) return 0;
+	return metersToLayoutDistance(diameterMeters / 2, mapRatio);
+}
+//#endregion
+//#region src/front/3d/engine/cuby.focusOnTargets.ts
+/** Expand floor-plane extents (X/Y in Cuby) so the framed view covers `diameterMeters`. */
+function inflateBox3OnFloorPlane(bbox, layoutMargin) {
+	const next = bbox.clone();
+	if (!(layoutMargin > 0)) return next;
+	next.min.x -= layoutMargin;
+	next.max.x += layoutMargin;
+	next.min.y -= layoutMargin;
+	next.max.y += layoutMargin;
+	return next;
+}
+function resolveTargetObject(cuby, options) {
+	const hasRoom = options.roomId !== void 0;
+	if (hasRoom === (options.workplaceId !== void 0)) return;
+	if (hasRoom) return cuby.elements.rooms.get(options.roomId)?.element.group;
+	return cuby.elements.workplaces.get(options.workplaceId)?.element.group;
+}
+function resolveFloorIdForTarget(cuby, options) {
+	if (options.roomId !== void 0) return cuby.elements.rooms.get(options.roomId)?.floorId;
+	if (options.workplaceId !== void 0) return cuby.elements.workplaces.get(options.workplaceId)?.floorId;
+}
+function getMapRatioForFloorId(cuby, floorId) {
+	const floor = cuby.stores.masterData.floors.get(floorId);
+	return getMapRatioFromMapScale(cuby.stores.masterData.mapScales.get(floor?.mapScaleId ?? 0));
+}
+/**
+* Build a framed bbox for a room/workplace mesh: world box + metric diameter padding.
+* Returns `undefined` when the target or bbox is missing/invalid.
+*/
+function buildCubyFocusBbox(cuby, options) {
+	const object = resolveTargetObject(cuby, options);
+	if (!object) return;
+	const floorId = resolveFloorIdForTarget(cuby, options);
+	if (floorId === void 0) return;
+	const bbox = mergeObjects3dToBox([object]);
+	if (!getBox3Validity(bbox).isValid) return;
+	const mapRatio = getMapRatioForFloorId(cuby, floorId);
+	return inflateBox3OnFloorPlane(bbox, layoutMarginFromDiameterMeters(options.diameterMeters, mapRatio));
+}
+/** Focus the Cuby camera on a room or workplace with a metric framing diameter. */
+function cubyFocusOnTargets(cuby, options) {
+	const bbox = buildCubyFocusBbox(cuby, options);
+	if (!bbox) return false;
+	cubyFitCameraToBbox(cuby, bbox, options.animate !== false);
+	return true;
+}
 //#endregion
 //#region src/front/3d/engine/cubyStore.ts
 var cubyStore = /* @__PURE__ */ new Map();
@@ -123131,34 +123140,67 @@ function syncSimpleBuildingCubySceneFromContext(cuby, contextId) {
 function fitSimpleBuildingLayout3dToView(contextId) {
 	cubyStore.get(contextId)?.centerCamera(true);
 }
+function zoomOnSimpleBuildingLayout3d(contextId, options) {
+	const cuby = cubyStore.get(contextId);
+	if (!cuby) return;
+	cubyFocusOnTargets(cuby, options);
+}
 //#endregion
-//#region src/surfy-sdk/api/fetchBuildingLayout.ts
-function normalizeBaseUrl$3(baseUrl) {
+//#region src/surfy-sdk/client/surfyHttp.helper.ts
+function normalizeSurfyBaseUrl(baseUrl) {
 	return baseUrl.replace(/\/$/, "");
 }
-async function fetchBuildingLayoutData(params) {
-	const { baseUrl, tenant, buildingId, getAccessToken, locale = "en", signal } = params;
-	const token = await getAccessToken();
-	const url = `${normalizeBaseUrl$3(baseUrl)}${LAYOUT_BUILDING_DATA_ROUTE}`;
+async function buildSurfyApiHeaders(auth) {
+	return {
+		Accept: "application/json",
+		"Content-Type": "application/json",
+		Authorization: `Bearer ${await auth.getAccessToken()}`,
+		"x-tenant": auth.tenant,
+		"accept-language": auth.locale ?? "en",
+		"X-Surfy-Sdk-Version": SURFY_SDK_VERSION
+	};
+}
+function createSurfyHttpError(message, status) {
+	const error = new Error(message);
+	error.status = status;
+	return error;
+}
+/**
+* Isomorphic Surfy HTTP helper — uses `globalThis.fetch` only (browser + Node 18+).
+* Does not touch `window` / `document`.
+*/
+async function surfyFetchJson(auth, path, init = {}) {
+	const url = `${normalizeSurfyBaseUrl(auth.baseUrl)}${path.startsWith("/") ? path : `/${path}`}`;
+	const headers = await buildSurfyApiHeaders(auth);
 	const response = await fetch(url, {
-		method: "POST",
-		headers: {
-			Accept: "application/json",
-			"Content-Type": "application/json",
-			Authorization: `Bearer ${token}`,
-			"x-tenant": tenant,
-			"accept-language": locale,
-			"X-Surfy-Sdk-Version": SURFY_SDK_VERSION
-		},
-		body: JSON.stringify({ buildingIds: [buildingId] }),
-		signal
+		method: init.method ?? "GET",
+		headers,
+		body: init.body === void 0 ? void 0 : JSON.stringify(init.body),
+		signal: init.signal
 	});
 	if (!response.ok) {
-		const error = /* @__PURE__ */ new Error(`Building layout fetch failed (${response.status})`);
-		error.status = response.status;
-		throw error;
+		const detail = await response.text().catch(() => "");
+		throw createSurfyHttpError(`Surfy request failed (${response.status})${detail ? `: ${detail}` : ""}`, response.status);
 	}
 	return response.json();
+}
+//#endregion
+//#region src/surfy-sdk/api/fetchBuildingLayout.ts
+async function fetchBuildingLayoutData(params) {
+	const { baseUrl, tenant, buildingId, floorIds, getAccessToken, locale = "en", signal } = params;
+	return surfyFetchJson({
+		baseUrl,
+		tenant,
+		getAccessToken,
+		locale
+	}, LAYOUT_BUILDING_DATA_ROUTE, {
+		method: "POST",
+		body: {
+			buildingIds: [buildingId],
+			...floorIds?.length ? { floorIds: [...floorIds] } : {}
+		},
+		signal
+	});
 }
 //#endregion
 //#region node_modules/.pnpm/@emotion+sheet@1.4.0/node_modules/@emotion/sheet/dist/emotion-sheet.esm.js
@@ -123988,12 +124030,12 @@ function createShadowEmotionCache(shadowRoot) {
 	cache.compat = true;
 	return cache;
 }
-function normalizeBaseUrl$2(baseUrl) {
+function normalizeBaseUrl$1(baseUrl) {
 	return baseUrl.replace(/\/$/, "");
 }
 /** Loads Surfy icon font stylesheets into the shadow root (same assets as the main SPA). */
 function injectEmbedStylesheets(shadowRoot, baseUrl) {
-	const normalizedBaseUrl = normalizeBaseUrl$2(baseUrl);
+	const normalizedBaseUrl = normalizeBaseUrl$1(baseUrl);
 	for (const assetPath of EMBED_ASSET_STYLESHEETS) {
 		if (shadowRoot.querySelector(`link[data-surfy-asset="${assetPath}"]`)) continue;
 		const link = document.createElement("link");
@@ -160382,8 +160424,9 @@ var JupLoader = (props) => {
 //#endregion
 //#region src/front/jup/Components/Tooltips/tooltipPortalContainer.context.ts
 /**
-* When set (e.g. SDK ShadowRoot), MUI Tooltip / Popper portals mount here
-* so Emotion styles from the shadow cache apply. Default = document.body (SPA).
+* When set (e.g. SDK embed host inside Shadow DOM), MUI Tooltip / Popper portals
+* mount here so Emotion styles from the shadow cache apply. Default = document.body (SPA).
+* Must be an Element (not ShadowRoot) — MUI Popper `container` typing.
 */
 var TooltipPortalContainerContext = (0, import_react.createContext)(void 0);
 function useTooltipPortalContainer() {
@@ -180545,7 +180588,7 @@ function mergeSimpleBuildingRoomDisplayOverride(contextId, roomId, options) {
 	const current = store.get(atom);
 	const next = {
 		...current[roomId] ?? {},
-		...options.showLabel !== void 0 ? { showLabel: options.showLabel } : {}
+		...options.showLabel === void 0 ? {} : { showLabel: options.showLabel }
 	};
 	store.set(atom, {
 		...current,
@@ -181922,11 +181965,6 @@ function setLayoutViewData(workCanvasId, view, data, masterData) {
 		});
 	}
 }
-function getItemTypeIdsFromLayoutData(data) {
-	const itemItemTypeIds = data.items.map((i) => i.itemTypeId);
-	const workplaceItemTypeIds = data.workplaces.flatMap((w) => getEdgeNodes(w.items).flatMap((i) => i.itemTypeId));
-	return jupUniq([...itemItemTypeIds, ...workplaceItemTypeIds]);
-}
 function setLayoutViewFiltersData(workCanvasId, _view, data, _masterData) {
 	const jotaiStore = getDefaultStore();
 	const { personSecurityProfiles, roomPoints, rooms, workplaceAffectationsByWorkplaceId } = data;
@@ -182507,9 +182545,11 @@ var storyIds = {
 		bulkE3: 20064,
 		focusNeighborsBase: 20100
 	},
+	/** Direction = root; marketing / rh = services under direction. @see docs/surfy/organizations-hierarchy.md */
 	organization: {
 		direction: 1,
-		marketing: 2
+		marketing: 2,
+		rh: 3
 	},
 	costCenter: { production: 10 },
 	dimensionRoom: { bulkCreated: 9001 },
@@ -182850,8 +182890,8 @@ var storyRoomForPointOption = {
 };
 ({ ...storyRoomForPointOption }), storyIds.organization.marketing, storyIds.costCenter.production;
 ({ ...storyRoomR204 }), storyIds.organization.marketing, storyIds.costCenter.production;
-storyIds.room.bulkC, storyFloorTwo.id, storyCompany.id, storyIds.organization.direction, storyIds.costCenter.production;
-storyIds.room.bulkD, storyFloorTwo.id, storyCompany.id, storyIds.organization.direction, storyIds.costCenter.production;
+storyIds.room.bulkC, storyFloorTwo.id, storyCompany.id, storyIds.organization.rh, storyIds.costCenter.production;
+storyIds.room.bulkD, storyFloorTwo.id, storyCompany.id, storyIds.organization.rh, storyIds.costCenter.production;
 storyIds.room.bulkE, storyFloorTwo.id, storyCompany.id, storyIds.organization.marketing, storyIds.costCenter.production;
 var storyWorkplaceRotationSurface = computeRoomSurfaceFromPoints([
 	{
@@ -182951,19 +182991,33 @@ var storyItemLaptopAlex = {
 	companyId: storyCompany.id
 };
 new Map([storyItemLaptopAlex].map((item) => [item.id, item]));
-var storyOrganizations = [{
-	id: storyIds.organization.direction,
-	name: "Direction",
-	color: "#1976d2"
-}, {
-	id: storyIds.organization.marketing,
-	name: "Marketing",
-	color: "#ed6c02"
-}];
+var storyOrganizations = [
+	{
+		id: storyIds.organization.direction,
+		name: "Direction",
+		color: "#90a4ae",
+		companyId: storyCompany.id
+	},
+	{
+		id: storyIds.organization.marketing,
+		name: "Marketing",
+		color: "#ed6c02",
+		organizationId: storyIds.organization.direction,
+		companyId: storyCompany.id
+	},
+	{
+		id: storyIds.organization.rh,
+		name: "RH",
+		color: "#1976d2",
+		organizationId: storyIds.organization.direction,
+		companyId: storyCompany.id
+	}
+];
 var storyOrganizationById = new Map(storyOrganizations.map((organization) => [organization.id, organization]));
 var storyCostCenters = [{
 	id: storyIds.costCenter.production,
-	name: "CC-Production"
+	name: "CC-Production",
+	companyId: storyCompany.id
 }];
 var storyCostCenterById = new Map(storyCostCenters.map((costCenter) => [costCenter.id, costCenter]));
 //#endregion
@@ -191158,24 +191212,6 @@ function getRpcRoute() {
 	return getApiRoute(rpcRoute);
 }
 //#endregion
-//#region src/front/jup/RPC/rpc.transport.ts
-/**
-* Create Connect RPC transport for browser
-* This is the single transport used by all RPC clients
-* Updated for @connectrpc/connect-web v2.1.0
-* 
-* Binary format is now supported! Express server has been configured to skip
-* JSON parsing for /api/rpc routes, allowing Connect middleware to handle
-* its own body parsing (both JSON and binary protobuf).
-*/
-function createRpcTransport() {
-	const { endpoints } = getPublicConfigurationFront();
-	return createConnectTransport({
-		baseUrl: `${endpoints.backend}${getRpcRoute()}`,
-		useBinaryFormat: true
-	});
-}
-//#endregion
 //#region src/core/generated/proto/surfy_pb.ts
 /**
 * Describes the file surfy.proto.
@@ -191224,6 +191260,24 @@ var BookingService = /*@__PURE__*/ serviceDesc(file_surfy, 5);
 */
 var MasterDataService = /*@__PURE__*/ serviceDesc(file_surfy, 6);
 //#endregion
+//#region src/front/jup/RPC/rpc.transport.ts
+/**
+* Create Connect RPC transport for browser
+* This is the single transport used by all RPC clients
+* Updated for @connectrpc/connect-web v2.1.0
+* 
+* Binary format is now supported! Express server has been configured to skip
+* JSON parsing for /api/rpc routes, allowing Connect middleware to handle
+* its own body parsing (both JSON and binary protobuf).
+*/
+function createRpcTransport() {
+	const { endpoints } = getPublicConfigurationFront();
+	return createConnectTransport({
+		baseUrl: `${endpoints.backend}${getRpcRoute()}`,
+		useBinaryFormat: true
+	});
+}
+//#endregion
 //#region src/front/jup/RPC/rpc.clients.ts
 /**
 * RPC Clients
@@ -191237,7 +191291,11 @@ createClient(MsSyncService, rpcTransport);
 createClient(MsPictureSyncService, rpcTransport);
 createClient(JupRoleAzureSyncService, rpcTransport);
 createClient(BookingService, rpcTransport);
-createClient(MasterDataService, rpcTransport);
+/**
+* Master Data RPC Client
+* Provides access to public master data services
+*/
+var masterDataRpcClient = createClient(MasterDataService, rpcTransport);
 //#endregion
 //#region src/back/Express/routes/rest/masterData/front.fetch.masterData.ts
 init_esm();
@@ -191262,45 +191320,104 @@ async function fetchAndSetMasterData(getBackendJson, companyName) {
 	}
 	setMasterDataInStore(masterData, getMasterDataTenantLoaders(), companyName);
 }
-//#endregion
-//#region src/surfy-sdk/api/fetchMasterData.ts
-function normalizeBaseUrl$1(baseUrl) {
-	return baseUrl.replace(/\/$/, "");
+function resolveMasterDataRpcClient(baseUrl) {
+	if (!baseUrl?.trim()) return masterDataRpcClient;
+	return createClient(MasterDataService, createConnectTransport({
+		baseUrl: `${baseUrl.replace(/\/$/, "")}${getRpcRoute()}`,
+		useBinaryFormat: true
+	}));
 }
 /**
-* Loads tenant master data for the SDK embed — same endpoint and store
-* population as the SPA (`GET /api/v1/data/master-data` via
-* {@link fetchAndSetMasterData}), with a Bearer token instead of a cookie
-* session.
+* Public master data via Connect RPC (`getPublicMasterData`) —
+* same path as SPA {@link useFetchAndSetMasterData} / MasterDataLoader.
+* Includes types such as `roomPointSegmentType`.
+*/
+async function fetchAndSetPublicMasterData(companyName, options = {}) {
+	await preloadAllMasterDataStoreLoaders();
+	try {
+		const headers = { "x-tenant": companyName };
+		if (options.getAccessToken) headers.Authorization = `Bearer ${await options.getAccessToken()}`;
+		setMasterDataInStore(await resolveMasterDataRpcClient(options.baseUrl).getPublicMasterData({}, { headers }), getMasterDataPublicLoaders(), companyName);
+	} catch (error) {
+		consoleLog("fetchAndSetPublicMasterData", "Error fetching public master data", error);
+		if (options.throwOnError) throw error;
+	}
+}
+//#endregion
+//#region src/surfy-sdk/api/fetchMasterData.ts
+function normalizeBaseUrl(baseUrl) {
+	return baseUrl.replace(/\/$/, "");
+}
+function mapEmbedMasterDataError(error) {
+	const status = error.status ?? Number(/Master data fetch failed \((\d+)\)/.exec(error.message ?? "")?.[1]);
+	if (status === 401) return {
+		code: "AUTH_EXPIRED",
+		message: "Master data authentication failed — check API user arRead roles"
+	};
+	if (status === 403) return {
+		code: "AUTH_FORBIDDEN",
+		message: "Not allowed to load master data for this tenant"
+	};
+	if (error instanceof TypeError) return {
+		code: "NETWORK",
+		message: error.message
+	};
+	return {
+		code: "NETWORK",
+		message: error.message ?? "Master data fetch failed"
+	};
+}
+/** Successful MD loads (tenant|baseUrl). */
+var masterDataEmbedLoaded = /* @__PURE__ */ new Set();
+/** In-flight loads shared across StrictMode remounts — must not use a single caller's AbortSignal. */
+var masterDataEmbedInflight = /* @__PURE__ */ new Map();
+/**
+* Same pair as SPA {@link useFetchAndSetMasterData} / MasterDataLoader:
+* - public MD via Connect RPC (`roomPointSegmentType`, …)
+* - tenant MD via REST `GET /api/v1/data/master-data`
 *
-* Requires the API user to have `arRead` on the master-data object types
-* (same data-security rules as any other `/api/v1/data` call).
+* Transport uses embed `baseUrl` + Bearer (demo proxy or Surfy origin).
 */
 async function fetchAndSetMasterDataForEmbed(params) {
 	const { baseUrl, tenant, getAccessToken, signal } = params;
-	const token = await getAccessToken();
 	if (signal?.aborted) return;
-	const base = normalizeBaseUrl$1(baseUrl);
-	const getJson = async (_label, path) => {
-		const response = await fetch(`${base}${path}`, {
-			method: "GET",
-			headers: {
-				Accept: "application/json",
-				Authorization: `Bearer ${token}`,
-				"x-tenant": tenant,
-				"X-Surfy-Sdk-Version": SURFY_SDK_VERSION
-			},
-			signal
+	const cacheKey = `${tenant}|${normalizeBaseUrl(baseUrl)}`;
+	if (masterDataEmbedLoaded.has(cacheKey)) return;
+	let loadPromise = masterDataEmbedInflight.get(cacheKey);
+	if (!loadPromise) {
+		loadPromise = (async () => {
+			const token = await getAccessToken();
+			const base = normalizeBaseUrl(baseUrl);
+			const getJson = async (_label, path) => {
+				const response = await fetch(`${base}${path}`, {
+					method: "GET",
+					headers: {
+						Accept: "application/json",
+						Authorization: `Bearer ${token}`,
+						"x-tenant": tenant,
+						"X-Surfy-Sdk-Version": SURFY_SDK_VERSION
+					}
+				});
+				if (!response.ok) {
+					const error = /* @__PURE__ */ new Error(`Master data fetch failed (${response.status})`);
+					error.status = response.status;
+					throw error;
+				}
+				return response.json();
+			};
+			await preloadAllMasterDataStoreLoaders();
+			await Promise.all([fetchAndSetPublicMasterData(tenant, {
+				baseUrl: base,
+				getAccessToken: async () => token,
+				throwOnError: true
+			}), fetchAndSetMasterData(getJson, tenant)]);
+			masterDataEmbedLoaded.add(cacheKey);
+		})().finally(() => {
+			masterDataEmbedInflight.delete(cacheKey);
 		});
-		if (!response.ok) {
-			const error = /* @__PURE__ */ new Error(`Master data fetch failed (${response.status})`);
-			error.status = response.status;
-			throw error;
-		}
-		return response.json();
-	};
-	await preloadAllMasterDataStoreLoaders();
-	await fetchAndSetMasterData(getJson, tenant);
+		masterDataEmbedInflight.set(cacheKey, loadPromise);
+	}
+	await loadPromise;
 }
 //#endregion
 //#region src/front/surfy/SimpleFloorLayoutViewer/simpleFloorEmbedContext.helper.ts
@@ -191333,22 +191450,12 @@ function seedEmbedContextStores(store, tenant, allLoadersReady) {
 	store.set(securityStoreAtom(tenant), embedSecurityStore);
 	store.set(masterDataStoreLoadersReadyAtom, true);
 }
-/** Minimal tenant context for SDK floor embed (sync — does not require Cuby / useMasterDataStores). */
-function ensureSimpleFloorEmbedContext(tenant) {
-	const store = getDefaultStore();
-	ensureCurrentCompany(store, tenant);
-	if (!store.get(masterDataStoreLoadersReadyAtom)) seedEmbedContextStores(store, tenant, false);
-}
 /**
-* Bootstraps the jotai stores for a building 3D embed — mirrors the SPA's
-* `MasterDataLoader` pattern: preload loaders, seed empty maps (so
-* `useMasterDataStores` never Suspense-throws), then fetch and populate
-* full tenant master data via Bearer token.
-*
-* Master data is mandatory: if the fetch fails, this rejects and the embed
-* must not mount.
+* Bootstraps jotai stores for any SDK embed (floor 2D / building 3D) —
+* mirrors SPA MasterDataLoader / useFetchAndSetMasterData:
+* public MD (Connect RPC) + tenant MD (REST), then layout can render.
 */
-async function prepareSimpleBuildingEmbedContext(params) {
+async function prepareSimpleEmbedContext(params) {
 	const { tenant, baseUrl, getAccessToken, signal } = params;
 	const store = getDefaultStore();
 	ensureCurrentCompany(store, tenant);
@@ -191433,7 +191540,7 @@ function SimpleBuildingPlanContent(props) {
 	const [embedReady, setEmbedReady] = (0, import_react.useState)(false);
 	(0, import_react.useEffect)(() => {
 		const abortController = new AbortController();
-		prepareSimpleBuildingEmbedContext({
+		prepareSimpleEmbedContext({
 			tenant,
 			baseUrl,
 			getAccessToken,
@@ -191443,7 +191550,7 @@ function SimpleBuildingPlanContent(props) {
 		}).catch((error) => {
 			if (abortController.signal.aborted) return;
 			setEmbedReady(false);
-			onError?.(mapMasterDataError(error));
+			onError?.(mapEmbedMasterDataError(error));
 		});
 		return () => {
 			abortController.abort();
@@ -191494,25 +191601,6 @@ function SimpleBuildingPlanContent(props) {
 		})
 	});
 }
-function mapMasterDataError(error) {
-	const status = error.status ?? Number(/Master data fetch failed \((\d+)\)/.exec(error.message ?? "")?.[1]);
-	if (status === 401) return {
-		code: "AUTH_EXPIRED",
-		message: "Master data authentication failed — check API user arRead roles"
-	};
-	if (status === 403) return {
-		code: "AUTH_FORBIDDEN",
-		message: "Not allowed to load master data for this tenant"
-	};
-	if (error instanceof TypeError) return {
-		code: "NETWORK",
-		message: error.message
-	};
-	return {
-		code: "NETWORK",
-		message: error.message ?? "Master data fetch failed"
-	};
-}
 function SimpleBuildingPlanRoot(props) {
 	const { emotionCache, ...contentProps } = props;
 	const content = /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Provider, {
@@ -191558,7 +191646,8 @@ var OBSERVED_ATTRIBUTES$1 = [
 	"tenant",
 	"base-url",
 	"locale",
-	"fill-parent"
+	"fill-parent",
+	"floor-ids"
 ];
 var instanceCounter$1 = 0;
 var SurfyBuildingLayout3dElementImpl = class extends HTMLElement {
@@ -191569,6 +191658,7 @@ var SurfyBuildingLayout3dElementImpl = class extends HTMLElement {
 	#roomColors = {};
 	#themeOptions;
 	#layout3dOptions = {};
+	#fetchFloorIds;
 	#layout;
 	#abortController;
 	#instanceId;
@@ -191629,11 +191719,17 @@ var SurfyBuildingLayout3dElementImpl = class extends HTMLElement {
 			return;
 		}
 		if (name === "base-url") this.#syncEmbedAssets();
-		if (name === "building-id" || name === "tenant" || name === "base-url" || name === "locale") this.#loadLayout();
+		if (name === "floor-ids") this.#fetchFloorIds = parseFloorIdsAttribute(newValue);
+		if (name === "building-id" || name === "tenant" || name === "base-url" || name === "locale" || name === "floor-ids") this.#loadLayout();
 	}
 	setAccessTokenProvider(provider) {
 		this.#accessTokenProvider = provider;
 		if (this.isConnected) this.#loadLayout();
+	}
+	setFetchFloorIds(floorIds) {
+		this.#fetchFloorIds = floorIds?.length ? [...floorIds] : void 0;
+		if (this.#fetchFloorIds?.length) this.setAttribute("floor-ids", this.#fetchFloorIds.join(","));
+		else this.removeAttribute("floor-ids");
 	}
 	setTheme(theme) {
 		this.#themeOptions = theme ?? void 0;
@@ -191642,10 +191738,12 @@ var SurfyBuildingLayout3dElementImpl = class extends HTMLElement {
 	setRoomColors(colors) {
 		this.#roomColors = { ...colors };
 		this.#applyRoomColors();
+		this.#renderReact();
 	}
 	clearRoomColors() {
 		this.#roomColors = {};
 		this.#applyRoomColors();
+		this.#renderReact();
 	}
 	setOptions(options) {
 		this.#layout3dOptions = {
@@ -191657,6 +191755,9 @@ var SurfyBuildingLayout3dElementImpl = class extends HTMLElement {
 	fitToView() {
 		fitSimpleBuildingLayout3dToView(this.#getContextId());
 	}
+	zoomOn(options) {
+		zoomOnSimpleBuildingLayout3d(this.#getContextId(), options);
+	}
 	updateRoom(roomId, options) {
 		if (options.color !== void 0) if (options.color === null) {
 			const nextColors = { ...this.#roomColors };
@@ -191667,7 +191768,10 @@ var SurfyBuildingLayout3dElementImpl = class extends HTMLElement {
 			[roomId]: options.color
 		};
 		updateSimpleBuildingRoom(this.#getContextId(), roomId, options);
-		if (options.color !== void 0) this.#applyRoomColors();
+		if (options.color !== void 0) {
+			this.#applyRoomColors();
+			this.#renderReact();
+		}
 	}
 	async #loadLayout() {
 		const configError = this.#getConfigError();
@@ -191686,6 +191790,7 @@ var SurfyBuildingLayout3dElementImpl = class extends HTMLElement {
 				baseUrl,
 				tenant,
 				buildingId,
+				floorIds: this.#fetchFloorIds,
 				getAccessToken: this.#accessTokenProvider,
 				locale,
 				signal: this.#abortController.signal
@@ -191721,7 +191826,7 @@ var SurfyBuildingLayout3dElementImpl = class extends HTMLElement {
 			layout3dOptions: this.#layout3dOptions,
 			fillParent: this.#hasFillParentAttribute(),
 			emotionCache: this.#emotionCache,
-			tooltipPortalContainer: this.#shadow,
+			tooltipPortalContainer: this.#mountHost,
 			themeOptions: this.#themeOptions,
 			onReady: (readyBuildingId) => {
 				this.dispatchEvent(new CustomEvent("surfy:ready", {
@@ -191795,193 +191900,222 @@ var SurfyBuildingLayout3dElementImpl = class extends HTMLElement {
 		}));
 	}
 };
-//#endregion
-//#region src/front/surfy/SimpleFloorLayoutViewer/simpleFloorWorkCanvasId.helper.ts
-function getSimpleFloorWorkCanvasId(floorId, instanceId = "0") {
-	return `simple-floor-${floorId}-${instanceId}`;
+function parseFloorIdsAttribute(value) {
+	if (!value?.trim()) return;
+	const ids = value.split(",").map((part) => Number(part.trim())).filter((id) => Number.isFinite(id));
+	return ids.length > 0 ? ids : void 0;
 }
 //#endregion
-//#region src/surfy-sdk/api/fetchFloorLayout.ts
-function normalizeBaseUrl(baseUrl) {
-	return baseUrl.replace(/\/$/, "");
+//#region src/front/jup/Map/WorkCanvas/zoom.animation.ts
+init_utils();
+function getDistance(sourceTransform, targetTransform) {
+	if (!sourceTransform) return 1e3;
+	return distanceBetweenPoints(multiplyPoint2d(sourceTransform.translate, sourceTransform.scale), multiplyPoint2d(targetTransform.translate, targetTransform.scale));
 }
-async function fetchFloorLayoutData(params) {
-	const { baseUrl, tenant, floorId, getAccessToken, locale = "en", signal } = params;
-	const token = await getAccessToken();
-	const url = `${normalizeBaseUrl(baseUrl)}${LAYOUT_FLOOR_DATA_ROUTE}`;
-	const response = await fetch(url, {
-		method: "POST",
-		headers: {
-			Accept: "application/json",
-			"Content-Type": "application/json",
-			Authorization: `Bearer ${token}`,
-			"x-tenant": tenant,
-			"accept-language": locale,
-			"X-Surfy-Sdk-Version": SURFY_SDK_VERSION
+function getZoomAnimation(sourceTransform, targetTransform, timingFunction) {
+	const distance = getDistance(sourceTransform, targetTransform);
+	return {
+		transform: targetTransform,
+		delayMs: Math.log(distance) * 150,
+		timingFunction
+	};
+}
+//#endregion
+//#region src/front/jup/Map/WorkCanvasSvg.state.ts
+init_esm();
+init_react();
+function useWorkCanvasScale(workCanvasId) {
+	return useAtomValue(workCanvasSvgTransformScale(workCanvasId));
+}
+function useWorkCanvasTranslate(workCanvasId) {
+	return useAtomValue(workCanvasSvgTransformTranslate(workCanvasId));
+}
+function getWorkCanvasTransformFromStore(workCanvasId) {
+	const store = getDefaultStore();
+	const scale = store.get(workCanvasSvgTransformScale(workCanvasId));
+	const translate = store.get(workCanvasSvgTransformTranslate(workCanvasId));
+	if (!translate) return;
+	return {
+		scale,
+		translate
+	};
+}
+//#endregion
+//#region src/front/jup/Map/WorkCanvas/fitToView.callback.ts
+init_esm();
+init_helper$3();
+init_Boundary();
+init_SvgModels();
+function getFitToViewTransform(size, customPoints, fitMargin) {
+	const boundaries = [];
+	const customPointsBbox = getBoundsFromPoints(customPoints);
+	if (!areBoundsEmpty(customPointsBbox)) boundaries.push(customPointsBbox);
+	const bbox = getBoundaryBoxFromBounds(mergeBounds(boundaries));
+	const margin = createRegularMargin(fitMargin);
+	const scale = getScaleFromBoundsAndSize(size, bbox.size, margin);
+	return {
+		newTransform: {
+			translate: getTranslateForBBox(bbox, scale, margin),
+			scale
 		},
-		body: JSON.stringify({ floorId }),
-		signal
-	});
-	if (!response.ok) {
-		const error = /* @__PURE__ */ new Error(`Layout fetch failed (${response.status})`);
-		error.status = response.status;
-		throw error;
+		bbox
+	};
+}
+function fitToView(workCanvasId, animate, getCustomPoints) {
+	const store = getDefaultStore();
+	const bbox = store.get(workCanvasSvgBbox(workCanvasId));
+	const customPoints = getCustomPoints ? getCustomPoints(workCanvasId) : [];
+	if (bbox) {
+		const sourceTransform = getWorkCanvasTransformFromStore(workCanvasId);
+		const { newTransform } = getFitToViewTransform(bbox.size, customPoints);
+		if (sourceTransform) if (animate) store.set(workCanvasSvgTransformAnimation(workCanvasId), getZoomAnimation(sourceTransform, newTransform, "ease-out"));
+		else {
+			store.set(workCanvasSvgTransformScale(workCanvasId), newTransform.scale);
+			store.set(workCanvasSvgTransformTranslate(workCanvasId), newTransform.translate);
+		}
 	}
-	return response.json();
 }
 //#endregion
-//#region src/core/generated/helpers/mapScale.helper.generated.ts
-function isMapScale(mapScale) {
-	return !!mapScale;
+//#region src/front/surfy/Map/Workplace/WorkplaceCanvasItem.ts
+init_utils();
+init_TextAnchorDrawer_helper();
+function getTranslatedWorkplaceTextAnchorPoints(workplace) {
+	const { position } = workplace;
+	const { textPosition, anchorPosition } = getTextAnchorOrDefault(workplace.textAnchor);
+	return [sumPoints2d(position, textPosition), sumPoints2d(position, anchorPosition)];
 }
 //#endregion
-//#region src/front/surfy/SimpleFloorLayoutViewer/seedEmbedMasterDataFromLayout.helper.ts
-init_building_state_generated();
-init_floor_state_generated();
-init_itemType_state_generated();
-init_mapScale_state_generated();
-init_roomPointSegmentType_state_generated();
-init_roomType_state_generated();
-init_workplaceType_state_generated();
-init_lodash_helper();
+//#region src/front/jup/Map/WorkCanvas/zoomOnItems.ts
+init_esm();
+init_geometry();
+init_helper$3();
+init_Boundary();
+init_SvgModels();
 init_edgeNodes_utils();
-function getRoomPointSegmentTypeIdsFromLayoutData(data) {
-	return jupUniq(Object.values(data.roomPointSegments ?? {}).map((segment) => segment.roomPointSegmentTypeId).filter((id) => typeof id === "number"));
+init_helper$2();
+init_helper$1();
+function getFurnitureObjectTypePoints(objectTypeName, entity, context) {
+	const { itemTypes, mapRatio, workplaceTypes, itemTypeIconSize } = context;
+	switch (objectTypeName) {
+		case "item": {
+			const r = entity;
+			return [...getItemPoints(r, itemTypes, mapRatio, itemTypeIconSize), ...getTranslatedItemTextAnchorPoints(r)];
+		}
+		case "workplace": {
+			const workplace = entity;
+			const { workplaceTypeId } = workplace;
+			const workplaceType = workplaceTypes.get(workplaceTypeId);
+			if (!workplaceType) return [];
+			return getWorkplaceBoundingBox(workplaceType, workplace, getNormalizedMapRatio(mapRatio));
+		}
+	}
 }
-function getRoomTypeIdsFromLayoutData(data) {
-	return jupUniq(data.rooms.map((room) => room.roomTypeId).filter((id) => typeof id === "number"));
+function getObjectTypePoints(objectTypeName, entity, context) {
+	switch (objectTypeName) {
+		case "dimension": {
+			const r = entity;
+			return context.dimensionRooms.filter((dr) => dr.dimensionId === r.id).map((dr) => dr.room).filter(isRoom).flatMap((r) => [...getRoomPoints(r, context.roomPoints), ...getTranslatedRoomTextAnchorPoints(r, context.roomPoints)]);
+		}
+		case "roomPointRoom": {
+			const r = entity;
+			if (r.roomPoint) return [r.roomPoint];
+			return [];
+		}
+		case "room": {
+			const r = entity;
+			const rooms = [...getRoomPoints(r, context.roomPoints), ...getTranslatedRoomTextAnchorPoints(r, context.roomPoints)];
+			const workplaces = getEdgeNodes(r.workplaces).flatMap((w) => getObjectTypePoints("workplace", w, context));
+			return [...rooms, ...workplaces];
+		}
+		case "item":
+		case "workplace": return getFurnitureObjectTypePoints(objectTypeName, entity, context);
+		default: break;
+	}
+	return [];
 }
-function getWorkplaceTypeIdsFromLayoutData(data) {
-	return jupUniq(data.workplaces.map((workplace) => workplace.workplaceTypeId).filter((id) => typeof id === "number"));
+function getWorkplaceBoundingBox(workplaceType, workplace, normalizedMapRatio) {
+	const { size } = workplaceType;
+	if (!size) return [];
+	const { position, rotation } = workplace;
+	return [...[
+		{
+			x: position.x - size.width / 2 * normalizedMapRatio,
+			y: position.y - size.height / 2 * normalizedMapRatio
+		},
+		{
+			x: position.x - size.width / 2 * normalizedMapRatio,
+			y: position.y + size.height / 2 * normalizedMapRatio
+		},
+		{
+			x: position.x + size.width / 2 * normalizedMapRatio,
+			y: position.y - size.height / 2 * normalizedMapRatio
+		},
+		{
+			x: position.x + size.width / 2 * normalizedMapRatio,
+			y: position.y + size.height / 2 * normalizedMapRatio
+		}
+	].map((p) => rotatePoint(position, p, rotation)), ...getTranslatedWorkplaceTextAnchorPoints(workplace)];
 }
-function getBuildingIdsFromLayoutData(data) {
-	return jupUniq(Object.values(data.buildings ?? {}).map((building) => building?.id).filter((id) => typeof id === "number"));
-}
-function getPrimaryBuildingId(data) {
-	return getBuildingIdsFromLayoutData(data)[0] ?? 0;
-}
-function resolveFloorsToSeed(data) {
-	const floors = data.floors ?? [];
-	if (floors.length > 0) return floors;
-	return (data.floorIds ?? []).map((id, index) => ({
-		id,
-		name: `Floor ${id}`,
-		level: index,
-		height: wallsHeights.full,
-		buildingId: getPrimaryBuildingId(data)
-	}));
-}
-function seedFloorsAndMapScalesFromLayout(data) {
-	resolveFloorsToSeed(data).forEach((floor) => {
-		setFloorInMasterDataStore({
-			id: floor.id,
-			name: floor.name,
-			level: floor.level,
-			height: floor.height ?? wallsHeights.full,
-			buildingId: floor.buildingId,
-			structureId: floor.structureId,
-			mapScaleId: floor.mapScaleId
-		});
-		if (isMapScale(floor.mapScale)) setMapScaleInMasterDataStore({
-			id: floor.mapScale.id,
-			name: floor.mapScale.name,
-			ratio: floor.mapScale.ratio,
-			p1: floor.mapScale.p1,
-			p2: floor.mapScale.p2,
-			length: floor.mapScale.length
-		});
+function getAllPointsFromShapeSelectionData(selectionData, context) {
+	return selectionData.flatMap((item) => {
+		const [objectTypeName, entity] = item;
+		return getObjectTypePoints(objectTypeName, entity, context);
 	});
 }
-/** Seeds minimal master-data entities referenced by a floor layout payload (SDK embed). */
-function seedEmbedMasterDataFromLayout(data) {
-	getRoomPointSegmentTypeIdsFromLayoutData(data).forEach((id) => {
-		setRoomPointSegmentTypeInMasterDataStore({
-			id,
-			name: `Segment type ${id}`,
-			code: "solid-line"
-		});
-	});
-	getRoomTypeIdsFromLayoutData(data).forEach((id) => {
-		setRoomTypeInMasterDataStore({
-			id,
-			name: `Room type ${id}`
-		});
-	});
-	getItemTypeIdsFromLayoutData(data).forEach((id) => {
-		setItemTypeInMasterDataStore({
-			id,
-			name: `Item type ${id}`
-		});
-	});
-	getWorkplaceTypeIdsFromLayoutData(data).forEach((id) => {
-		setWorkplaceTypeInMasterDataStore({
-			id,
-			name: `Workplace type ${id}`
-		});
-	});
-	getBuildingIdsFromLayoutData(data).forEach((id) => {
-		setBuildingInMasterDataStore({
-			id,
-			name: `Building ${id}`
-		});
-	});
-	seedFloorsAndMapScalesFromLayout(data);
-	data.roomTypeFloors?.forEach((roomTypeFloor) => {
-		if (roomTypeFloor.roomTypeId) setRoomTypeInMasterDataStore({
-			id: roomTypeFloor.roomTypeId,
-			name: `Room type ${roomTypeFloor.roomTypeId}`
-		});
-	});
-	data.workplaces.forEach((workplace) => {
-		getEdgeNodes(workplace.items).forEach((item) => {
-			if (item.itemTypeId) setItemTypeInMasterDataStore({
-				id: item.itemTypeId,
-				name: `Item type ${item.itemTypeId}`
-			});
-		});
-	});
+/** Resolve layout margin: metric diameter when provided, else legacy static px padding. */
+function resolveZoomOnLayoutMargin(mapRatio, diameterMeters) {
+	if (diameterMeters !== void 0 && diameterMeters > 0) return layoutMarginFromDiameterMeters(diameterMeters, mapRatio);
+	return 200;
 }
-//#endregion
-//#region src/front/surfy/SimpleFloorLayoutViewer/simpleFloorLayoutView.ts
-/** Read-only embed profile — no Surfy filter coloring, no labels, neutral room fills. */
-var simpleFloorLayoutView = {
-	roomActiveTab: "roomTypes",
-	roomTypes: { all: true },
-	workplacesTypes: { all: false },
-	itemTypeFamilies: { all: false },
-	backgroundLayout: { opacity: 1 },
-	options: { securityCompliance: false },
-	colorizeWorkplaces: {
-		flex: false,
-		free: false,
-		transit: false,
-		shared: false
-	},
-	colorizeItems: {
-		removeColors: true,
-		free: false
+function getSvgTransformFromSelection(selectionData, context, svgBbox, diameterMeters) {
+	const allPoints = getAllPointsFromShapeSelectionData(selectionData, context);
+	const marginNumber = resolveZoomOnLayoutMargin(context.mapRatio, diameterMeters);
+	return getTranformForPoints(allPoints, svgBbox.size, marginNumber);
+}
+function getTranformForPoints(points, size, marginNumber) {
+	const bbox = getBoundaryBoxFromPoints(points);
+	const margin = createRegularMargin(marginNumber);
+	const scale = getScaleFromBoundsAndSize(size, bbox.size, margin);
+	const translateFromBbox = getTranslateForBBox(bbox, scale, margin);
+	return {
+		translate: {
+			x: translateFromBbox.x + size.width / 2 - (bbox.size.width + margin.left + margin.right) / 2 * scale,
+			y: translateFromBbox.y + size.height / 2 - (bbox.size.height + margin.top + margin.bottom) / 2 * scale
+		},
+		scale
+	};
+}
+var zoomOnSelectionListCallback = (workCanvasId, selectionData, context, animateZoom, diameterMeters) => {
+	const store = getDefaultStore();
+	const svgBbox = store.get(workCanvasSvgBbox(workCanvasId));
+	const scale = store.get(workCanvasSvgTransformScale(workCanvasId));
+	const translate = store.get(workCanvasSvgTransformTranslate(workCanvasId));
+	if (svgBbox) {
+		const sourceTransform = {
+			scale,
+			translate: translate ?? {
+				x: 0,
+				y: 0
+			}
+		};
+		const transform = getSvgTransformFromSelection(selectionData, context, svgBbox, diameterMeters);
+		if (transform) if (animateZoom) store.set(workCanvasSvgTransformAnimation(workCanvasId), getZoomAnimation(sourceTransform, transform, "ease-in"));
+		else {
+			store.set(workCanvasSvgTransformScale(workCanvasId), transform.scale);
+			store.set(workCanvasSvgTransformTranslate(workCanvasId), transform.translate);
+		}
 	}
 };
-//#endregion
-//#region src/front/surfy/SimpleFloorLayoutViewer/loadSimpleFloorLayout.ts
-init_esm();
-init_floor_state_generated();
-var emptyMasterData = {};
-function ensureFloorInMasterDataStore(floorId) {
-	setFloorInMasterDataStore({
-		id: floorId,
-		name: `Floor ${floorId}`
-	});
+function zoomOnSelection(workCanvasId, selectionList, animateZoom, options) {
+	const allSelection = getSelectionDataFromSelectionListTransaction(selectionList);
+	const context = getShapeContextSync(workCanvasId, getRoomsFromSelectionData(allSelection));
+	if (context && allSelection.length > 0) zoomOnSelectionListCallback(workCanvasId, allSelection, context, animateZoom, options?.diameterMeters);
 }
-/** Loads floor layout for the read-only viewer without full master-data boot (embed-safe). */
-async function loadSimpleFloorLayout(workCanvasId, floorId, data) {
-	ensureFloorInMasterDataStore(floorId);
-	seedEmbedMasterDataFromLayout(data);
-	setLayoutViewNoData(workCanvasId, simpleFloorLayoutView);
-	setLayoutViewData(workCanvasId, simpleFloorLayoutView, data, emptyMasterData);
-	setFloorLayoutViewDataCallback(workCanvasId, floorId);
-	setWorkCanvasLoaded(workCanvasId, true);
-	getDefaultStore().set(workCanvasSelected(workCanvasId), true);
+function getRoomsFromSelectionData(allSelection) {
+	return allSelection.filter(([objectTypeName]) => objectTypeName === "room").map((e) => e[1]).filter(isEntityRoom);
+}
+function isEntityRoom(room) {
+	return !!room;
 }
 //#endregion
 //#region src/front/jup/Map/WorkCanvas/FitToView.helper.ts
@@ -192026,6 +192160,62 @@ function getFloorCustomPoints(workCanvasId) {
 			y: floorBbox.bounds.bottom
 		}
 	];
+}
+//#endregion
+//#region src/front/surfy/SimpleFloorLayoutViewer/simpleFloorWorkCanvasId.helper.ts
+function getSimpleFloorWorkCanvasId(floorId, instanceId = "0") {
+	return `simple-floor-${floorId}-${instanceId}`;
+}
+//#endregion
+//#region src/surfy-sdk/api/fetchFloorLayout.ts
+async function fetchFloorLayoutData(params) {
+	const { baseUrl, tenant, floorId, getAccessToken, locale = "en", signal } = params;
+	return surfyFetchJson({
+		baseUrl,
+		tenant,
+		getAccessToken,
+		locale
+	}, LAYOUT_FLOOR_DATA_ROUTE, {
+		method: "POST",
+		body: { floorId },
+		signal
+	});
+}
+//#endregion
+//#region src/front/surfy/SimpleFloorLayoutViewer/simpleFloorLayoutView.ts
+/** Read-only embed profile — no Surfy filter coloring, no labels, neutral room fills. */
+var simpleFloorLayoutView = {
+	roomActiveTab: "roomTypes",
+	roomTypes: { all: true },
+	workplacesTypes: { all: false },
+	itemTypeFamilies: { all: false },
+	backgroundLayout: { opacity: 1 },
+	options: { securityCompliance: false },
+	colorizeWorkplaces: {
+		flex: false,
+		free: false,
+		transit: false,
+		shared: false
+	},
+	colorizeItems: {
+		removeColors: true,
+		free: false
+	}
+};
+//#endregion
+//#region src/front/surfy/SimpleFloorLayoutViewer/loadSimpleFloorLayout.ts
+init_esm();
+/**
+* Loads floor layout for the read-only viewer.
+* Master data must already be populated by {@link prepareSimpleEmbedContext}.
+*/
+async function loadSimpleFloorLayout(workCanvasId, floorId, data) {
+	const masterData = getMasterDataFrontStores();
+	setLayoutViewNoData(workCanvasId, simpleFloorLayoutView);
+	setLayoutViewData(workCanvasId, simpleFloorLayoutView, data, masterData);
+	setFloorLayoutViewDataCallback(workCanvasId, floorId);
+	setWorkCanvasLoaded(workCanvasId, true);
+	getDefaultStore().set(workCanvasSelected(workCanvasId), true);
 }
 //#endregion
 //#region src/front/jup/Map/WorkCanvas/WorkCanvasLoadingIcon.tsx
@@ -194239,156 +194429,6 @@ function WorkCanvasClickOptionTitle(props) {
 	] });
 }
 //#endregion
-//#region src/front/jup/Map/WorkCanvas/zoom.animation.ts
-init_utils();
-function getDistance(sourceTransform, targetTransform) {
-	if (!sourceTransform) return 1e3;
-	return distanceBetweenPoints(multiplyPoint2d(sourceTransform.translate, sourceTransform.scale), multiplyPoint2d(targetTransform.translate, targetTransform.scale));
-}
-function getZoomAnimation(sourceTransform, targetTransform, timingFunction) {
-	const distance = getDistance(sourceTransform, targetTransform);
-	return {
-		transform: targetTransform,
-		delayMs: Math.log(distance) * 150,
-		timingFunction
-	};
-}
-//#endregion
-//#region src/front/surfy/Map/Workplace/WorkplaceCanvasItem.ts
-init_utils();
-init_TextAnchorDrawer_helper();
-function getTranslatedWorkplaceTextAnchorPoints(workplace) {
-	const { position } = workplace;
-	const { textPosition, anchorPosition } = getTextAnchorOrDefault(workplace.textAnchor);
-	return [sumPoints2d(position, textPosition), sumPoints2d(position, anchorPosition)];
-}
-//#endregion
-//#region src/front/jup/Map/WorkCanvas/zoomOnItems.ts
-init_esm();
-init_geometry();
-init_helper$3();
-init_Boundary();
-init_SvgModels();
-init_edgeNodes_utils();
-init_helper$2();
-init_helper$1();
-function getFurnitureObjectTypePoints(objectTypeName, entity, context) {
-	const { itemTypes, mapRatio, workplaceTypes, itemTypeIconSize } = context;
-	switch (objectTypeName) {
-		case "item": {
-			const r = entity;
-			return [...getItemPoints(r, itemTypes, mapRatio, itemTypeIconSize), ...getTranslatedItemTextAnchorPoints(r)];
-		}
-		case "workplace": {
-			const workplace = entity;
-			const { workplaceTypeId } = workplace;
-			const workplaceType = workplaceTypes.get(workplaceTypeId);
-			if (!workplaceType) return [];
-			return getWorkplaceBoundingBox(workplaceType, workplace, getNormalizedMapRatio(mapRatio));
-		}
-	}
-}
-function getObjectTypePoints(objectTypeName, entity, context) {
-	switch (objectTypeName) {
-		case "dimension": {
-			const r = entity;
-			return context.dimensionRooms.filter((dr) => dr.dimensionId === r.id).map((dr) => dr.room).filter(isRoom).flatMap((r) => [...getRoomPoints(r, context.roomPoints), ...getTranslatedRoomTextAnchorPoints(r, context.roomPoints)]);
-		}
-		case "roomPointRoom": {
-			const r = entity;
-			if (r.roomPoint) return [r.roomPoint];
-			return [];
-		}
-		case "room": {
-			const r = entity;
-			const rooms = [...getRoomPoints(r, context.roomPoints), ...getTranslatedRoomTextAnchorPoints(r, context.roomPoints)];
-			const workplaces = getEdgeNodes(r.workplaces).flatMap((w) => getObjectTypePoints("workplace", w, context));
-			return [...rooms, ...workplaces];
-		}
-		case "item":
-		case "workplace": return getFurnitureObjectTypePoints(objectTypeName, entity, context);
-		default: break;
-	}
-	return [];
-}
-function getWorkplaceBoundingBox(workplaceType, workplace, normalizedMapRatio) {
-	const { size } = workplaceType;
-	if (!size) return [];
-	const { position, rotation } = workplace;
-	return [...[
-		{
-			x: position.x - size.width / 2 * normalizedMapRatio,
-			y: position.y - size.height / 2 * normalizedMapRatio
-		},
-		{
-			x: position.x - size.width / 2 * normalizedMapRatio,
-			y: position.y + size.height / 2 * normalizedMapRatio
-		},
-		{
-			x: position.x + size.width / 2 * normalizedMapRatio,
-			y: position.y - size.height / 2 * normalizedMapRatio
-		},
-		{
-			x: position.x + size.width / 2 * normalizedMapRatio,
-			y: position.y + size.height / 2 * normalizedMapRatio
-		}
-	].map((p) => rotatePoint(position, p, rotation)), ...getTranslatedWorkplaceTextAnchorPoints(workplace)];
-}
-function getAllPointsFromShapeSelectionData(selectionData, context) {
-	return selectionData.flatMap((item) => {
-		const [objectTypeName, entity] = item;
-		return getObjectTypePoints(objectTypeName, entity, context);
-	});
-}
-function getSvgTransformFromSelection(selectionData, context, svgBbox) {
-	return getTranformForPoints(getAllPointsFromShapeSelectionData(selectionData, context), svgBbox.size, 200);
-}
-function getTranformForPoints(points, size, marginNumber) {
-	const bbox = getBoundaryBoxFromPoints(points);
-	const margin = createRegularMargin(marginNumber);
-	const scale = getScaleFromBoundsAndSize(size, bbox.size, margin);
-	const translateFromBbox = getTranslateForBBox(bbox, scale, margin);
-	return {
-		translate: {
-			x: translateFromBbox.x + size.width / 2 - (bbox.size.width + margin.left + margin.right) / 2 * scale,
-			y: translateFromBbox.y + size.height / 2 - (bbox.size.height + margin.top + margin.bottom) / 2 * scale
-		},
-		scale
-	};
-}
-var zoomOnSelectionListCallback = (workCanvasId, selectionData, context, animateZoom) => {
-	const store = getDefaultStore();
-	const svgBbox = store.get(workCanvasSvgBbox(workCanvasId));
-	const scale = store.get(workCanvasSvgTransformScale(workCanvasId));
-	const translate = store.get(workCanvasSvgTransformTranslate(workCanvasId));
-	if (svgBbox) {
-		const sourceTransform = {
-			scale,
-			translate: translate ?? {
-				x: 0,
-				y: 0
-			}
-		};
-		const transform = getSvgTransformFromSelection(selectionData, context, svgBbox);
-		if (transform) if (animateZoom) store.set(workCanvasSvgTransformAnimation(workCanvasId), getZoomAnimation(sourceTransform, transform, "ease-in"));
-		else {
-			store.set(workCanvasSvgTransformScale(workCanvasId), transform.scale);
-			store.set(workCanvasSvgTransformTranslate(workCanvasId), transform.translate);
-		}
-	}
-};
-function zoomOnSelection(workCanvasId, selectionList, animateZoom) {
-	const allSelection = getSelectionDataFromSelectionListTransaction(selectionList);
-	const context = getShapeContextSync(workCanvasId, getRoomsFromSelectionData(allSelection));
-	if (context && allSelection.length > 0) zoomOnSelectionListCallback(workCanvasId, allSelection, context, animateZoom);
-}
-function getRoomsFromSelectionData(allSelection) {
-	return allSelection.filter(([objectTypeName]) => objectTypeName === "room").map((e) => e[1]).filter(isEntityRoom);
-}
-function isEntityRoom(room) {
-	return !!room;
-}
-//#endregion
 //#region src/front/jup/Components/Button/actionId.ts
 /** DOM attribute for stable E2E / automation selectors (locale-independent). */
 var SURFY_ACTION_ID_ATTR = "data-action-id";
@@ -194856,61 +194896,6 @@ function ToggleSelectModeOption(props) {
 //#endregion
 //#region node_modules/.pnpm/@mui+icons-material@9.1.1_@mui+material@9.1.1_@emotion+react@11.14.0_@types+react@19.2._9b347fe2e167545244369f75d4366d7f/node_modules/@mui/icons-material/PhotoSizeSelectActual.mjs
 var PhotoSizeSelectActual_default = createSvgIcon(/*#__PURE__*/ (0, import_jsx_runtime.jsx)("path", { d: "M21 3H3C2 3 1 4 1 5v14c0 1.1.9 2 2 2h18c1 0 2-1 2-2V5c0-1-1-2-2-2M5 17l3.5-4.5 2.5 3.01L14.5 11l4.5 6z" }), "PhotoSizeSelectActual");
-//#endregion
-//#region src/front/jup/Map/WorkCanvasSvg.state.ts
-init_esm();
-init_react();
-function useWorkCanvasScale(workCanvasId) {
-	return useAtomValue(workCanvasSvgTransformScale(workCanvasId));
-}
-function useWorkCanvasTranslate(workCanvasId) {
-	return useAtomValue(workCanvasSvgTransformTranslate(workCanvasId));
-}
-function getWorkCanvasTransformFromStore(workCanvasId) {
-	const store = getDefaultStore();
-	const scale = store.get(workCanvasSvgTransformScale(workCanvasId));
-	const translate = store.get(workCanvasSvgTransformTranslate(workCanvasId));
-	if (!translate) return;
-	return {
-		scale,
-		translate
-	};
-}
-//#endregion
-//#region src/front/jup/Map/WorkCanvas/fitToView.callback.ts
-init_esm();
-init_helper$3();
-init_Boundary();
-init_SvgModels();
-function getFitToViewTransform(size, customPoints, fitMargin) {
-	const boundaries = [];
-	const customPointsBbox = getBoundsFromPoints(customPoints);
-	if (!areBoundsEmpty(customPointsBbox)) boundaries.push(customPointsBbox);
-	const bbox = getBoundaryBoxFromBounds(mergeBounds(boundaries));
-	const margin = createRegularMargin(fitMargin);
-	const scale = getScaleFromBoundsAndSize(size, bbox.size, margin);
-	return {
-		newTransform: {
-			translate: getTranslateForBBox(bbox, scale, margin),
-			scale
-		},
-		bbox
-	};
-}
-function fitToView(workCanvasId, animate, getCustomPoints) {
-	const store = getDefaultStore();
-	const bbox = store.get(workCanvasSvgBbox(workCanvasId));
-	const customPoints = getCustomPoints ? getCustomPoints(workCanvasId) : [];
-	if (bbox) {
-		const sourceTransform = getWorkCanvasTransformFromStore(workCanvasId);
-		const { newTransform } = getFitToViewTransform(bbox.size, customPoints);
-		if (sourceTransform) if (animate) store.set(workCanvasSvgTransformAnimation(workCanvasId), getZoomAnimation(sourceTransform, newTransform, "ease-out"));
-		else {
-			store.set(workCanvasSvgTransformScale(workCanvasId), newTransform.scale);
-			store.set(workCanvasSvgTransformTranslate(workCanvasId), newTransform.translate);
-		}
-	}
-}
 //#endregion
 //#region src/front/jup/Map/WorkCanvasBackground/workCanvasBackground.jotai.ts
 init_esm();
@@ -197886,9 +197871,32 @@ function SimpleFloorLayoutViewer(props) {
 //#region src/surfy-sdk/react/SimpleFloorPlanRoot.tsx
 init_esm();
 function SimpleFloorPlanContent(props) {
-	const { instanceId, floorId, tenant, locale = "en", layoutData, roomColors, fillParent, tooltipPortalContainer, themeOptions, onReady, onRoomHover, onRoomSelected } = props;
+	const { instanceId, floorId, tenant, baseUrl, getAccessToken, locale = "en", layoutData, roomColors, fillParent, tooltipPortalContainer, themeOptions, onReady, onError, onRoomHover, onRoomSelected } = props;
 	const workCanvasId = (0, import_react.useMemo)(() => getSimpleFloorWorkCanvasId(floorId, instanceId), [floorId, instanceId]);
-	ensureSimpleFloorEmbedContext(tenant);
+	const [embedReady, setEmbedReady] = (0, import_react.useState)(false);
+	(0, import_react.useEffect)(() => {
+		const abortController = new AbortController();
+		prepareSimpleEmbedContext({
+			tenant,
+			baseUrl,
+			getAccessToken,
+			signal: abortController.signal
+		}).then(() => {
+			if (!abortController.signal.aborted) setEmbedReady(true);
+		}).catch((error) => {
+			if (abortController.signal.aborted) return;
+			setEmbedReady(false);
+			onError?.(mapEmbedMasterDataError(error));
+		});
+		return () => {
+			abortController.abort();
+		};
+	}, [
+		tenant,
+		baseUrl,
+		getAccessToken,
+		onError
+	]);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SetupI18nContext, {
 		I18nContext: I18NHelpContext,
 		defaultLanguage: locale === "fr" ? "fr" : "en",
@@ -197904,7 +197912,7 @@ function SimpleFloorPlanContent(props) {
 						flexDirection: "column",
 						minHeight: fillParent ? 0 : void 0
 					},
-					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SimpleFloorLayoutViewer, {
+					children: embedReady ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SimpleFloorLayoutViewer, {
 						workCanvasId,
 						floorId,
 						layoutData,
@@ -197913,6 +197921,15 @@ function SimpleFloorPlanContent(props) {
 						onReady: () => onReady?.(floorId),
 						onRoomHover,
 						onRoomSelected
+					}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Box$1, {
+						sx: {
+							display: "flex",
+							alignItems: "center",
+							justifyContent: "center",
+							flex: 1,
+							minHeight: 200
+						},
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(JupLoader, {})
 					})
 				})
 			})
@@ -198036,7 +198053,14 @@ var SurfyFloorLayout2dElementImpl = class extends HTMLElement {
 		this.#renderReact();
 	}
 	setOptions(_options) {}
-	fitToView() {}
+	fitToView() {
+		fitToView(this.#getWorkCanvasId(), true, getFloorCustomPoints);
+	}
+	zoomOn(options) {
+		const selection = resolveZoomOnSelection(options);
+		if (!selection) return;
+		zoomOnSelection(this.#getWorkCanvasId(), [selection], options.animate !== false, { diameterMeters: options.diameterMeters });
+	}
 	updateRoom(roomId, options) {
 		if (options.color === void 0) return;
 		if (options.color === null) {
@@ -198089,22 +198113,28 @@ var SurfyFloorLayout2dElementImpl = class extends HTMLElement {
 		const tenant = this.getAttribute("tenant") ?? "";
 		const locale = this.getAttribute("locale") ?? "en";
 		if (!this.#reactRoot) this.#reactRoot = (0, import_client.createRoot)(this.#mountHost);
+		const baseUrl = this.getAttribute("base-url") ?? "";
 		this.#reactRoot.render(/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SimpleFloorPlanRoot, {
 			instanceId: this.#instanceId,
 			floorId,
 			tenant,
+			baseUrl,
+			getAccessToken: this.#accessTokenProvider,
 			locale,
 			layoutData: this.#layout,
 			roomColors: this.#roomColors,
 			fillParent: this.#hasFillParentAttribute(),
 			emotionCache: this.#emotionCache,
-			tooltipPortalContainer: this.#shadow,
+			tooltipPortalContainer: this.#mountHost,
 			themeOptions: this.#themeOptions,
 			onReady: (readyFloorId) => {
 				this.dispatchEvent(new CustomEvent("surfy:ready", {
 					bubbles: true,
 					detail: { floorId: readyFloorId }
 				}));
+			},
+			onError: (detail) => {
+				this.#dispatchError(detail);
 			},
 			onRoomHover: (detail) => {
 				this.dispatchEvent(new CustomEvent("surfy:room-hover", {
@@ -198169,6 +198199,12 @@ var SurfyFloorLayout2dElementImpl = class extends HTMLElement {
 		}));
 	}
 };
+function resolveZoomOnSelection(options) {
+	const hasRoom = options.roomId !== void 0;
+	if (hasRoom === (options.workplaceId !== void 0)) return;
+	if (hasRoom) return ["room", options.roomId];
+	return ["workplace", options.workplaceId];
+}
 //#endregion
 //#region src/surfy-sdk/registerSurfyLayoutElements.ts
 /** Registers layout Web Components. */
@@ -198177,15 +198213,64 @@ function registerSurfyLayoutElements() {
 	if (!customElements.get("surfy-building-layout-3d")) customElements.define(SURFY_BUILDING_LAYOUT_3D_TAG, SurfyBuildingLayout3dElementImpl);
 }
 //#endregion
+//#region src/surfy-sdk/client/SurfyClient.ts
+var SURFY_ENTITIES_ROUTE = "/api/v1/data/entities";
+/**
+* Isomorphic Surfy data client — inject `baseUrl` (origin) at creation.
+* Primary API: {@link SurfyClient.fetchEntities} with your own QueryNode
+* (business queries stay in the app, not in the SDK).
+*/
+var SurfyClient = class SurfyClient {
+	auth;
+	constructor(options) {
+		this.auth = {
+			baseUrl: options.baseUrl,
+			tenant: options.tenant,
+			getAccessToken: options.getAccessToken,
+			locale: options.locale
+		};
+	}
+	static create(options) {
+		if (!options.baseUrl?.trim()) throw new Error("SurfyClient.create: baseUrl (API origin) is required");
+		if (!options.tenant?.trim()) throw new Error("SurfyClient.create: tenant is required");
+		if (typeof options.getAccessToken !== "function") throw new Error("SurfyClient.create: getAccessToken is required");
+		return new SurfyClient(options);
+	}
+	get baseUrl() {
+		return this.auth.baseUrl;
+	}
+	get tenant() {
+		return this.auth.tenant;
+	}
+	/**
+	* POST `/api/v1/data/entities` — pass any QueryNode you build in app code.
+	*/
+	async fetchEntities(queryNode, signal) {
+		return [...(await surfyFetchJson(this.auth, "/api/v1/data/entities", {
+			method: "POST",
+			body: { queryNode },
+			signal
+		})).entities ?? []];
+	}
+};
+//#endregion
+//#region src/surfy-sdk/client/queryNode.models.ts
+function createFilter(operator, column, value) {
+	return {
+		operator,
+		column,
+		value
+	};
+}
+//#endregion
 //#region src/surfy-sdk/SurfySdk.ts
+/** @surfy-allow-barrel-reexports Public SDK entry re-exports mount handle types for consumers. */
 var KIND_TO_TAG = {
 	"floor-2d": SURFY_FLOOR_LAYOUT_2D_TAG,
-	"floor-3d": SURFY_FLOOR_LAYOUT_3D_TAG,
 	"building-3d": SURFY_BUILDING_LAYOUT_3D_TAG
 };
 var KIND_ID_ATTRIBUTE = {
 	"floor-2d": "floor-id",
-	"floor-3d": "floor-id",
 	"building-3d": "building-id"
 };
 function assertBrowserEnvironment() {
@@ -198196,24 +198281,16 @@ function createSdkError(code, message) {
 	error.code = code;
 	return error;
 }
-function resolveContainer(container) {
+function resolveContainer(container, methodName) {
 	assertBrowserEnvironment();
 	if (typeof container !== "string") return container;
 	const node = document.querySelector(container);
-	if (!(node instanceof HTMLElement)) throw createSdkError("SDK_CONFIG", `SurfySdk.mount: container selector "${container}" did not match an HTMLElement.`);
+	if (!(node instanceof HTMLElement)) throw createSdkError("SDK_CONFIG", `SurfySdk.${methodName}: container selector "${container}" did not match an HTMLElement.`);
 	return node;
 }
-function resolveEntityId(kind, options) {
-	if (kind === "building-3d") {
-		if (options.buildingId === void 0) throw createSdkError("SDK_CONFIG", "SurfySdk.mount: buildingId is required for kind \"building-3d\".");
-		return options.buildingId;
-	}
-	if (options.floorId === void 0) throw createSdkError("SDK_CONFIG", `SurfySdk.mount: floorId is required for kind "${kind}".`);
-	return options.floorId;
-}
-function createCustomElement(tag) {
+function createCustomElement(tag, methodName) {
 	const ctor = customElements.get(tag);
-	if (!ctor) throw createSdkError("SDK_CONFIG", `SurfySdk.mount: layout tag "${tag}" is not registered in this SDK bundle.`);
+	if (!ctor) throw createSdkError("SDK_CONFIG", `SurfySdk.${methodName}: layout tag "${tag}" is not registered in this SDK bundle.`);
 	return new ctor();
 }
 function listRoomIdsFromElement(element) {
@@ -198282,6 +198359,10 @@ function createLayoutHandle(kind, tag, element, unbind) {
 			assertAlive();
 			element.fitToView();
 		},
+		zoomOn(zoomOptions) {
+			assertAlive();
+			element.zoomOn(zoomOptions);
+		},
 		updateRoom(roomId, roomOptions) {
 			assertAlive();
 			element.updateRoom(roomId, roomOptions);
@@ -198306,24 +198387,48 @@ function createLayoutHandle(kind, tag, element, unbind) {
 		}
 	};
 }
-function mountLayout(options) {
-	registerSurfyLayoutElements();
-	const container = resolveContainer(options.container);
-	const { kind } = options;
-	const tag = KIND_TO_TAG[kind];
-	const entityId = resolveEntityId(kind, options);
-	const element = createCustomElement(tag);
-	element.setAttribute(KIND_ID_ATTRIBUTE[kind], String(entityId));
+function applyCommonMountAttributes(element, options) {
 	element.setAttribute("tenant", options.tenant);
 	element.setAttribute("base-url", options.baseUrl);
 	if (options.locale) element.setAttribute("locale", options.locale);
 	element.setAttribute("fill-parent", options.fillParent === false ? "false" : "");
+}
+function resolveBuilding3dOptions(options) {
+	const { floorIds, options: layoutOptions } = options;
+	if (!floorIds?.length && !layoutOptions) return;
+	return {
+		...layoutOptions,
+		selectedFloorIds: layoutOptions?.selectedFloorIds ?? floorIds
+	};
+}
+function mountFloor2d(options) {
+	registerSurfyLayoutElements();
+	const container = resolveContainer(options.container, "mountFloor2d");
+	const tag = SURFY_FLOOR_LAYOUT_2D_TAG;
+	const element = createCustomElement(tag, "mountFloor2d");
+	element.setAttribute("floor-id", String(options.floorId));
+	applyCommonMountAttributes(element, options);
 	if (options.theme !== void 0) element.setTheme(options.theme);
-	if (options.options) element.setOptions(options.options);
 	element.setAccessTokenProvider(options.getAccessToken);
 	const unbind = bindLayoutListeners(element, options);
 	container.replaceChildren(element);
-	return createLayoutHandle(kind, tag, element, unbind);
+	return createLayoutHandle("floor-2d", tag, element, unbind);
+}
+function mountBuilding3d(options) {
+	registerSurfyLayoutElements();
+	const container = resolveContainer(options.container, "mountBuilding3d");
+	const tag = SURFY_BUILDING_LAYOUT_3D_TAG;
+	const element = createCustomElement(tag, "mountBuilding3d");
+	element.setAttribute("building-id", String(options.buildingId));
+	applyCommonMountAttributes(element, options);
+	if (options.floorIds?.length) element.setFetchFloorIds(options.floorIds);
+	if (options.theme !== void 0) element.setTheme(options.theme);
+	const layout3dOptions = resolveBuilding3dOptions(options);
+	if (layout3dOptions) element.setOptions(layout3dOptions);
+	element.setAccessTokenProvider(options.getAccessToken);
+	const unbind = bindLayoutListeners(element, options);
+	container.replaceChildren(element);
+	return createLayoutHandle("building-3d", tag, element, unbind);
 }
 /** Global Surfy SDK facade — import once, mount layouts into a host container. */
 var SurfySdk = {
@@ -198336,12 +198441,11 @@ var SurfySdk = {
 		registerSurfyLayoutElements();
 		return Boolean(customElements.get(KIND_TO_TAG[kind]));
 	},
-	mount(options) {
-		return mountLayout(options);
-	}
+	mountFloor2d,
+	mountBuilding3d
 };
 //#endregion
 //#region src/surfy-sdk/index.ts
 registerSurfyLayoutElements();
 //#endregion
-export { SURFY_BUILDING_LAYOUT_3D_TAG, SURFY_FLOOR_LAYOUT_2D_TAG, SURFY_FLOOR_LAYOUT_3D_TAG, SURFY_SDK_VERSION, SurfyBuildingLayout3dElementImpl, SurfyFloorLayout2dElementImpl, SurfySdk, fetchBuildingLayoutData, fetchFloorLayoutData, registerSurfyLayoutElements };
+export { SURFY_BUILDING_LAYOUT_3D_TAG, SURFY_ENTITIES_ROUTE, SURFY_FLOOR_LAYOUT_2D_TAG, SURFY_SDK_VERSION, SurfyBuildingLayout3dElementImpl, SurfyClient, SurfyFloorLayout2dElementImpl, SurfySdk, createFilter, fetchBuildingLayoutData, fetchFloorLayoutData, registerSurfyLayoutElements };

@@ -3,6 +3,9 @@ export const SURFY_DEMO_PROXY_BEARER = 'surfy-demo-proxy';
 
 export const SURFY_DEMO_SESSION_COOKIE = 'surfy_demo_session';
 
+/** Browser calls `/proxy/api/v1/...` — demo server only relays + injects Bearer. */
+export const SURFY_DEMO_PROXY_PATH_PREFIX = '/proxy';
+
 export function isDemoProxyBearer(authorizationHeader: string | null | undefined): boolean {
   if (!authorizationHeader) return true;
   const value = authorizationHeader.trim();

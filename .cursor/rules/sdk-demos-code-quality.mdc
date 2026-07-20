@@ -15,7 +15,7 @@ Référence complète : [docs/CODE_QUALITY.md](../../docs/CODE_QUALITY.md).
 /:authMode/:host/:section
   authMode = api | oauth
   host     = react-web | react-native
-  section  = floor-2d | floor-3d | building-3d
+  section  = floor-2d | building-3d | data-api
 ```
 
 Les endpoints serveur restent `/api/session`, `/api/v1/*`, etc. (proxy Vite restreint — ne pas proxifier toute la branche `/api`).
@@ -23,7 +23,7 @@ Les endpoints serveur restent `/api/session`, `/api/v1/*`, etc. (proxy Vite rest
 ## Obligatoire
 
 - **Importer** les types depuis `@surfy/surfy-sdk` — ne jamais recopier `SurfyLayout3dOptions`, wall modes, etc.
-- **UI démo** : `SurfySdk.mount` + handle (`setOptions`, `setRoomColors`, `updateRoom`, `fitToView`). Pas de Cuby / jotai Surfy / `createElement` manuel pour les layouts.
+- **UI démo** : `SurfySdk.mountFloor2d` / `SurfySdk.mountBuilding3d` + handle (`setOptions`, `setRoomColors`, `updateRoom`, `fitToView`). Pas de Cuby / jotai Surfy / `createElement` manuel pour les layouts.
 - **Secrets** : `SURFY_CONNECTION_STRING` côté serveur (`parseSurfyConnectionString`) ; jamais `clientSecret` / JWT Surfy dans `VITE_*`.
 - **Hooks** : déclarer les callbacks avant de les référencer dans d’autres deps ; pas d’effet de bord dans `useMemo`.
 - **Taille** : panel React ≲ 250 lignes — extraire `*Controls.tsx` / `*helpers.ts` si plus gros.

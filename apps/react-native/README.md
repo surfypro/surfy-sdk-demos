@@ -12,7 +12,7 @@ On the Vite site:
 /:authMode/:host/:section
   api | oauth
     react-web | react-native
-      floor-2d | floor-3d | building-3d
+      floor-2d | building-3d | data-api
 
 RN shell (native UI)          ← simulated by phone chrome
   └─ react-native-webview     ← iframe

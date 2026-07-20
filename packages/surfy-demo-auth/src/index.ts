@@ -14,8 +14,17 @@ export {
 export {
   isDemoProxyBearer,
   SURFY_DEMO_PROXY_BEARER,
+  SURFY_DEMO_PROXY_PATH_PREFIX,
   SURFY_DEMO_SESSION_COOKIE,
 } from './demoSession.js';
+export {
+  forwardSurfyProxyRequest,
+  resolveSurfyProxyUpstreamPath,
+  SURFY_DEMO_API_ORIGIN_HEADER,
+  SURFY_DEMO_API_ORIGIN_QUERY,
+  type SurfyProxyForwardInput,
+  type SurfyProxyForwardResult,
+} from './surfyProxy.js';
 export {
   codeFromDemoAuthError,
   demoAuthErrorBody,

@@ -2,16 +2,18 @@
  * Client-side URL helpers for the React web demo.
  *
  * Browser → same origin only:
- *   GET  /api/session   → HttpOnly cookie (Surfy JWT stays on server)
- *   POST /api/v1/...    → proxy injects Bearer from SURFY_CONNECTION_STRING
+ *   GET  /api/session     → HttpOnly cookie (Surfy JWT stays on server)
+ *   *    /proxy/api/v1/…  → unique proxy injects Bearer (optional ?surfyApiOrigin=)
  */
 
-/** Origin passed to SDK web components (= page origin). */
+import { SURFY_DEMO_PROXY_PATH_PREFIX } from '@surfy/surfy-demo-auth/session';
+
+/** SDK / SurfyClient baseUrl = same-origin proxy prefix (not Surfy host). */
 export function getSurfyDemoBaseUrl(): string {
   if (typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin;
+    return `${window.location.origin}${SURFY_DEMO_PROXY_PATH_PREFIX}`;
   }
-  return '';
+  return SURFY_DEMO_PROXY_PATH_PREFIX;
 }
 
 export function getSurfySessionUrl(): string {
@@ -22,7 +24,9 @@ export function getSurfySessionUrl(): string {
   return '/api/session';
 }
 
+/** @deprecated Prefer SurfyClient with getSurfyDemoBaseUrl(); kept for ad-hoc paths. */
 export function getSurfyApiPath(path: string): string {
   const normalized = path.startsWith('/') ? path : `/${path}`;
-  return normalized.startsWith('/api/v1') ? normalized : `/api/v1${normalized}`;
+  const apiPath = normalized.startsWith('/api/v1') ? normalized : `/api/v1${normalized}`;
+  return `${SURFY_DEMO_PROXY_PATH_PREFIX}${apiPath}`;
 }

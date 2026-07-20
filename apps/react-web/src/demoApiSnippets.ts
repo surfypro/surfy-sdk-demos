@@ -1,19 +1,38 @@
 /** Copy-paste snippets for the SurfySdk high-level API. */
 
-export function snippetMountHeader(kind: string): string {
+export function snippetMountFloor2d(): string {
   return [
     "import { SurfySdk } from '@surfy/surfy-sdk';",
     '',
-    'const layout = SurfySdk.mount({',
+    'const layout = SurfySdk.mountFloor2d({',
     `  container: '#map',`,
-    `  kind: '${kind}',`,
     '  tenant,',
     '  baseUrl,',
-    '  // floorId or buildingId,',
+    '  floorId,',
     '  getAccessToken,',
     '});',
     '',
   ].join('\n');
+}
+
+export function snippetMountBuilding3d(withFloorIds = false): string {
+  return [
+    "import { SurfySdk } from '@surfy/surfy-sdk';",
+    '',
+    'const layout = SurfySdk.mountBuilding3d({',
+    `  container: '#map',`,
+    '  tenant,',
+    '  baseUrl,',
+    '  buildingId,',
+    ...(withFloorIds ? ['  floorIds: [floorId], // fetch + focus one floor',] : []),
+    '  getAccessToken,',
+    '});',
+    '',
+  ].join('\n');
+}
+
+export function snippetMountHeader(kind: 'floor-2d' | 'building-3d'): string {
+  return kind === 'building-3d' ? snippetMountBuilding3d() : snippetMountFloor2d();
 }
 
 export function snippetSetRoomColors(roomId: number, color: string): string {
@@ -40,11 +59,15 @@ export function snippetFitToView(): string {
   return 'layout.fitToView();';
 }
 
+export function snippetZoomOnRoom(roomId: number, diameterMeters = 5): string {
+  return `layout.zoomOn({ roomId: ${roomId}, diameterMeters: ${diameterMeters} });`;
+}
+
 export function snippetUpdateRoom(roomId: number, optionsLiteral: string): string {
   return `layout.updateRoom(${roomId}, ${optionsLiteral});`;
 }
 
-export function buildApiSnippetBlock(kind: string, lines: readonly string[]): string {
+export function buildApiSnippetBlock(kind: 'floor-2d' | 'building-3d', lines: readonly string[]): string {
   const body = lines.length > 0 ? lines.join('\n') : '// Cliquez Color / Blink / Clear pour voir l’appel';
   return `${snippetMountHeader(kind)}${body}`;
 }

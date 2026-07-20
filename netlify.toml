@@ -41,10 +41,17 @@
   status = 200
   force = true
 
-# Proxy Surfy REST — Bearer injected server-side
+# Unique Surfy proxy — relay only (Bearer injected server-side)
+[[redirects]]
+  from = "/proxy/*"
+  to = "/.netlify/functions/surfy-api-proxy/:splat"
+  status = 200
+  force = true
+
+# Legacy path → same proxy (optional compatibility)
 [[redirects]]
   from = "/api/v1/*"
-  to = "/.netlify/functions/surfy-api-proxy/:splat"
+  to = "/.netlify/functions/surfy-api-proxy/api/v1/:splat"
   status = 200
   force = true
 
