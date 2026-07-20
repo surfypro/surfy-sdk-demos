@@ -1,8 +1,10 @@
 import type { Handler, HandlerEvent } from '@netlify/functions';
 import {
   assertDemoGate,
+  demoAuthErrorBody,
   DemoGateError,
   fetchSurfyAccessToken,
+  httpStatusFromDemoAuthError,
   loadSurfyDemoAuthEnv,
   SURFY_DEMO_PROXY_BEARER,
   SURFY_DEMO_SESSION_COOKIE,
@@ -63,10 +65,9 @@ export const handler: Handler = async (event) => {
     };
   } catch (error) {
     if (error instanceof DemoGateError) {
-      return json(error.status, { error: error.message });
+      return json(error.status, demoAuthErrorBody(error, error.message));
     }
-    const message = error instanceof Error ? error.message : 'Session failed';
-    return json(502, { error: message });
+    return json(httpStatusFromDemoAuthError(error, 500), demoAuthErrorBody(error, 'Session failed'));
   }
 };
 

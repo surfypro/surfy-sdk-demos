@@ -5,6 +5,7 @@ export {
   type SurfyDemoAuthEnv,
 } from './config.js';
 export {
+  normalizeConnectionStringRaw,
   parseSurfyConnectionString,
   readEndpointFromConnectionString,
   readHostFromConnectionString,
@@ -15,6 +16,16 @@ export {
   SURFY_DEMO_PROXY_BEARER,
   SURFY_DEMO_SESSION_COOKIE,
 } from './demoSession.js';
+export {
+  codeFromDemoAuthError,
+  demoAuthErrorBody,
+  httpStatusFromDemoAuthError,
+  messageFromDemoAuthError,
+  sanitizeDemoHttpStatus,
+  SurfyConfigError,
+  SurfyUpstreamAuthError,
+  type DemoAuthErrorCode,
+} from './errors.js';
 export {
   clearCachedSurfyAccessToken,
   fetchSurfyAccessToken,

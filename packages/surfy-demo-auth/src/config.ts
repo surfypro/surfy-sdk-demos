@@ -1,4 +1,5 @@
 import { parseSurfyConnectionString } from './connectionString.js';
+import { SurfyConfigError } from './errors.js';
 
 export type SurfyDemoAuthEnv = {
   baseUrl: string;
@@ -37,6 +38,8 @@ function readDiscreteAuthEnv(env: NodeJS.ProcessEnv): SurfyDemoAuthEnv | null {
  *
  * Discrete SURFY_BASE_URL / SURFY_CLIENT_ID / SURFY_CLIENT_SECRET still work as fallback.
  * Never expose clientSecret to Vite / the browser.
+ *
+ * @throws {SurfyConfigError} when credentials are missing or the connection string is invalid
  */
 export function loadSurfyDemoAuthEnv(env: NodeJS.ProcessEnv = process.env): SurfyDemoAuthEnv {
   const demoGateKey = env.DEMO_GATE_KEY?.trim() || undefined;
@@ -58,7 +61,7 @@ export function loadSurfyDemoAuthEnv(env: NodeJS.ProcessEnv = process.env): Surf
     return { ...discrete, demoGateKey: discrete.demoGateKey ?? demoGateKey };
   }
 
-  throw new Error(
+  throw new SurfyConfigError(
     'Missing Surfy credentials. Set SURFY_CONNECTION_STRING=' +
       'host=<url>;client_id=<tenant>;client_secret=<secret> ' +
       '(or SURFY_BASE_URL + SURFY_CLIENT_ID + SURFY_CLIENT_SECRET).',
@@ -76,6 +79,7 @@ export function assertDemoGate(providedKey: string | null | undefined, expectedK
 
 export class DemoGateError extends Error {
   readonly status = 401;
+  readonly code = 'DEMO_GATE' as const;
 
   constructor(message: string) {
     super(message);

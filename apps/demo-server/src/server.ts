@@ -1,11 +1,15 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import {
   assertDemoGate,
+  demoAuthErrorBody,
   DemoGateError,
   fetchSurfyAccessToken,
+  httpStatusFromDemoAuthError,
   isDemoProxyBearer,
   loadSurfyDemoAuthEnv,
   normalizeBaseUrl,
+  sanitizeDemoHttpStatus,
+  type SurfyDemoAuthEnv,
   SURFY_DEMO_PROXY_BEARER,
   SURFY_DEMO_SESSION_COOKIE,
 } from '@surfy/surfy-demo-auth';
@@ -17,12 +21,28 @@ type SessionResponse = {
 
 type ErrorResponse = {
   error: string;
+  code?: string;
 };
 
-const authEnv = loadSurfyDemoAuthEnv();
 const app = express();
 const port = Number(process.env.PORT ?? 8787);
 const cookieSecure = process.env.COOKIE_SECURE === '1' || process.env.NODE_ENV === 'production';
+
+/** Lazy so a bad SURFY_CONNECTION_STRING returns JSON 500 instead of crashing at boot. */
+let authEnvCache: SurfyDemoAuthEnv | undefined;
+
+function getAuthEnv(): SurfyDemoAuthEnv {
+  authEnvCache ??= loadSurfyDemoAuthEnv();
+  return authEnvCache;
+}
+
+function sendAuthError(res: Response, error: unknown, fallbackMessage: string): void {
+  if (error instanceof DemoGateError) {
+    res.status(error.status).json(demoAuthErrorBody(error, error.message));
+    return;
+  }
+  res.status(httpStatusFromDemoAuthError(error, 500)).json(demoAuthErrorBody(error, fallbackMessage));
+}
 
 function readDemoGateKey(req: Request): string | undefined {
   const header = req.header('x-surfy-demo-key');
@@ -62,7 +82,7 @@ function requireSession(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
-async function resolveSurfyBearer(): Promise<string> {
+async function resolveSurfyBearer(authEnv: SurfyDemoAuthEnv): Promise<string> {
   return fetchSurfyAccessToken({
     baseUrl: authEnv.baseUrl,
     clientId: authEnv.clientId,
@@ -77,25 +97,22 @@ async function resolveSurfyBearer(): Promise<string> {
  */
 app.get('/api/session', async (req: Request, res: Response<SessionResponse | ErrorResponse>) => {
   try {
+    const authEnv = getAuthEnv();
     assertDemoGate(readDemoGateKey(req), authEnv.demoGateKey);
-    await resolveSurfyBearer(); // warm cache / fail fast
+    await resolveSurfyBearer(authEnv); // warm cache / fail fast
     setSessionCookie(res);
     res.json({ tenant: authEnv.clientId, authMode: 'api' });
   } catch (error) {
-    if (error instanceof DemoGateError) {
-      res.status(error.status).json({ error: error.message });
-      return;
-    }
-    const message = error instanceof Error ? error.message : 'Session failed';
-    res.status(502).json({ error: message });
+    sendAuthError(res, error, 'Session failed');
   }
 });
 
 /** @deprecated Use GET /api/session — never returns the Surfy JWT. */
 app.get('/api/surfy-token', async (req: Request, res: Response) => {
   try {
+    const authEnv = getAuthEnv();
     assertDemoGate(readDemoGateKey(req), authEnv.demoGateKey);
-    await resolveSurfyBearer();
+    await resolveSurfyBearer(authEnv);
     setSessionCookie(res);
     res.json({
       tenant: authEnv.clientId,
@@ -104,12 +121,7 @@ app.get('/api/surfy-token', async (req: Request, res: Response) => {
       proxyBearer: SURFY_DEMO_PROXY_BEARER,
     });
   } catch (error) {
-    if (error instanceof DemoGateError) {
-      res.status(error.status).json({ error: error.message });
-      return;
-    }
-    const message = error instanceof Error ? error.message : 'Token exchange failed';
-    res.status(502).json({ error: message });
+    sendAuthError(res, error, 'Token exchange failed');
   }
 });
 
@@ -123,6 +135,7 @@ app.get('/api/health', (_req: Request, res: Response<{ status: 'ok' }>) => {
  */
 app.use('/api/v1', requireSession, async (req: Request, res: Response) => {
   try {
+    const authEnv = getAuthEnv();
     const upstreamPath = req.originalUrl; // includes /api/v1/...
     const url = new URL(upstreamPath, `${normalizeBaseUrl(authEnv.baseUrl)}/`);
 
@@ -140,14 +153,14 @@ app.use('/api/v1', requireSession, async (req: Request, res: Response) => {
 
     const incomingAuth = req.header('authorization');
     if (isDemoProxyBearer(incomingAuth)) {
-      const token = await resolveSurfyBearer();
+      const token = await resolveSurfyBearer(authEnv);
       headers.set('authorization', `Bearer ${token}`);
     } else if (incomingAuth) {
       // Reject leaking real tokens from the browser in API demo mode
       res.status(400).json({ error: 'Use session proxy bearer only (surfy-demo-proxy)' });
       return;
     } else {
-      const token = await resolveSurfyBearer();
+      const token = await resolveSurfyBearer(authEnv);
       headers.set('authorization', `Bearer ${token}`);
     }
 
@@ -167,13 +180,13 @@ app.use('/api/v1', requireSession, async (req: Request, res: Response) => {
 
     const response = await fetch(url, init);
     const body = Buffer.from(await response.arrayBuffer());
-    res.status(response.status);
+    // Never forward 502/504 — Cloudflare would replace the body.
+    res.status(sanitizeDemoHttpStatus(response.status));
     const ct = response.headers.get('content-type');
     if (ct) res.setHeader('Content-Type', ct);
     res.send(body);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Upstream proxy failed';
-    res.status(502).json({ error: message });
+    sendAuthError(res, error, 'Upstream proxy failed');
   }
 });
 

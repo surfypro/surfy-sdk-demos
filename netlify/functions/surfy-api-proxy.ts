@@ -1,9 +1,13 @@
 import type { Handler, HandlerEvent } from '@netlify/functions';
 import {
+  demoAuthErrorBody,
   fetchSurfyAccessToken,
+  httpStatusFromDemoAuthError,
   isDemoProxyBearer,
   loadSurfyDemoAuthEnv,
   normalizeBaseUrl,
+  sanitizeDemoHttpStatus,
+  SurfyConfigError,
   SURFY_DEMO_SESSION_COOKIE,
 } from '@surfy/surfy-demo-auth';
 
@@ -84,7 +88,8 @@ export const handler: Handler = async (event) => {
     const contentType = response.headers.get('content-type') ?? 'application/octet-stream';
 
     return {
-      statusCode: response.status,
+      // Never forward 502/504 — Cloudflare would replace the body.
+      statusCode: sanitizeDemoHttpStatus(response.status),
       headers: {
         'Content-Type': contentType,
         ...corsHeaders(),
@@ -93,11 +98,10 @@ export const handler: Handler = async (event) => {
       isBase64Encoded: true,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Upstream proxy failed';
     return {
-      statusCode: 502,
+      statusCode: httpStatusFromDemoAuthError(error, 500),
       headers: { 'Content-Type': 'application/json', ...corsHeaders() },
-      body: JSON.stringify({ error: message }),
+      body: JSON.stringify(demoAuthErrorBody(error, 'Upstream proxy failed')),
     };
   }
 };
@@ -114,7 +118,7 @@ function resolveUpstreamPath(event: HandlerEvent): string {
     return `/api/v1/${path.slice(marker.length)}`;
   }
 
-  throw new Error(`Unable to resolve upstream path from ${path}`);
+  throw new SurfyConfigError(`Unable to resolve upstream path from ${path}`);
 }
 
 function copyRequestHeader(event: HandlerEvent, headers: Headers, name: string): void {

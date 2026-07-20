@@ -1,3 +1,5 @@
+import { SurfyUpstreamAuthError } from './errors.js';
+
 export type SurfyTokenApiResponse = {
   access_token?: string;
   token?: string;
@@ -27,7 +29,7 @@ export function normalizeBaseUrl(baseUrl: string): string {
 function resolveAccessToken(payload: SurfyTokenApiResponse): string {
   const token = payload.access_token ?? payload.token;
   if (!token) {
-    throw new Error('Surfy authentication response did not include access_token/token');
+    throw new SurfyUpstreamAuthError('Surfy authentication response did not include access_token/token');
   }
   return token;
 }
@@ -35,6 +37,8 @@ function resolveAccessToken(payload: SurfyTokenApiResponse): string {
 /**
  * Exchanges Surfy API credentials for a short-lived JWT.
  * Must only run server-side (demo-server or Netlify Function).
+ *
+ * @throws {SurfyUpstreamAuthError} when Surfy auth is unreachable or rejects credentials
  */
 export async function fetchSurfyAccessToken({
   baseUrl,
@@ -53,18 +57,26 @@ export async function fetchSurfyAccessToken({
   }
 
   try {
-    const response = await fetch(`${normalizeBaseUrl(baseUrl)}/api/v1/authentication/token`, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ clientId, clientSecret }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${normalizeBaseUrl(baseUrl)}/api/v1/authentication/token`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ clientId, clientSecret }),
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'network error';
+      throw new SurfyUpstreamAuthError(`Surfy authentication unreachable: ${detail}`);
+    }
 
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`Surfy authentication failed (${response.status}): ${detail || response.statusText}`);
+      throw new SurfyUpstreamAuthError(
+        `Surfy authentication failed (${response.status}): ${detail || response.statusText}`,
+      );
     }
 
     const payload = (await response.json()) as SurfyTokenApiResponse;
