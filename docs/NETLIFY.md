@@ -6,26 +6,28 @@ This app can be deployed on **Netlify** and talk to **Surfy alpha** (or another 
 
 | Surface | Status |
 |---------|--------|
-| React web demo (3 tabs) | Yes — floor 2D + building 3D when SDK registers them; floor 3D when tag ships |
-| Building / floor picker | Yes — live list via `POST /api/v1/data/entities` |
-| Token mint `/api/surfy-token` | Yes — Netlify Function |
-| Layout API via same-origin proxy | Yes — `/api/v1/*` → Surfy (`host` from connection string) |
-| React Native | Not on Netlify — use Expo/EAS; point WebView token URL at this Netlify `/api/surfy-token` |
+| React web demo (API mode) | Yes — session cookie + proxy; floor 2D / building 3D when SDK registers them |
+| Auth mode selector | API now; OAuth / Entra OBO placeholder |
+| Building / floor picker | Yes — reference buildings via `POST /api/v1/data/entities` |
+| Session `/api/session` | Yes — HttpOnly cookie; **no Surfy JWT in the browser** |
+| Layout API via same-origin proxy | Yes — `/api/v1/*` injects Bearer from connection string |
+| React Native | Not on Netlify — use Expo/EAS; WebView loads e.g. `/api/react-web/floor-2d?embed=1` |
 
 ## Security model (important)
 
 | Variable | Where | Public? |
 |----------|--------|---------|
-| `VITE_SURFY_BASE_URL` | Build / browser | Prefer **empty** on Netlify (same-origin) |
+| *(none for API origin)* | Browser | Always uses **page origin** (`/api/session`, `/api/v1/…`) |
+| Opaque bearer `surfy-demo-proxy` | Browser → proxy | Not a Surfy credential; proxy swaps it for the real JWT |
 | `VITE_DEMO_GATE_KEY` | Build / browser | Optional shared gate password |
 | `SURFY_CONNECTION_STRING` | Netlify Functions env | **Secret** — `host`;`client_id`;`client_secret` |
 | `DEMO_GATE_KEY` | Netlify Functions env | Server; must match `VITE_DEMO_GATE_KEY` if set |
 
-Floor / building IDs are **not** env vars — the UI loads them from the API after minting a token.
+Floor / building IDs are **not** env vars — the UI loads them after opening a session.
 
-**Do not** put `client_secret` in `VITE_*`. Anyone can open DevTools and read Vite env.
+**Do not** put `client_secret` in `VITE_*`. The Surfy JWT never enters JavaScript in API mode.
 
-A public site that mints tokens is still an **open proxy** to your Surfy API user unless you add a gate:
+A public site that opens sessions is still an **open proxy** to your Surfy API user unless you add a gate:
 
 1. Set **`DEMO_GATE_KEY`** + **`VITE_DEMO_GATE_KEY`** (same value), and/or  
 2. Enable **Netlify site password** / Identity, and/or  
@@ -37,10 +39,9 @@ A public site that mints tokens is still an **open proxy** to your Surfy API use
 2. Build settings are in `netlify.toml` (no need to override unless you want).
 3. **Environment variables** (Site settings → Environment):
 
-### Build (public)
+### Build (optional public)
 
 ```
-VITE_SURFY_BASE_URL=
 VITE_DEMO_GATE_KEY=optional-shared-gate
 ```
 
@@ -51,18 +52,18 @@ SURFY_CONNECTION_STRING=host=https://your-alpha-host.example;client_id=your-tena
 DEMO_GATE_KEY=optional-shared-gate
 ```
 
-4. Deploy. Open the site → pick a building / floor → tabs **Étage 2D** / **Bâtiment 3D** (and **Étage 3D** once registered).
+4. Deploy. Open the site → mode **API** → pick a building / floor → tabs **Étage 2D** / **Bâtiment 3D**.
 
-## How same-origin proxy works
+## How same-origin proxy works (API mode)
 
 ```
 Browser
-  ├─ GET  /api/surfy-token          → Netlify Function → Surfy /authentication/token
-  ├─ POST /api/v1/data/entities     → list buildings + floors (picker)
-  └─ POST /api/v1/layout/...        → layout for the selected WC
+  ├─ GET  /api/session              → HttpOnly cookie + { tenant, authMode } (no JWT)
+  ├─ POST /api/v1/data/entities     → list buildings + floors (cookie + opaque bearer)
+  └─ POST /api/v1/layout/...        → layout for the selected WC (Bearer injected server-side)
 ```
 
-The SDK `base-url` is the Netlify origin. No Surfy CORS change required for the Netlify domain.
+The SDK `base-url` is the Netlify origin. `setAccessTokenProvider` returns the opaque `surfy-demo-proxy` string; the proxy replaces it with the real Surfy JWT from `SURFY_CONNECTION_STRING`.
 
 ## Local / Docker Netlify parity
 
@@ -84,7 +85,7 @@ cp .env.docker.example .env.docker
 docker compose up --build
 # → http://localhost:8080
 # → GET /api/health
-# → GET /api/surfy-token
+# → GET /api/session
 ```
 
 Compose injects `SURFY_CONNECTION_STRING` / `DEMO_GATE_KEY` at **container start** (not baked into the image layers unless you put them in build args).
@@ -97,4 +98,4 @@ Compose injects `SURFY_CONNECTION_STRING` / `DEMO_GATE_KEY` at **container start
 
 ## React Native note
 
-Netlify hosts the **web** demo only. For RN, reuse the same deployed `/api/surfy-token` URL from the device/simulator and load the WC inside a WebView (see Surfy SDK integration docs).
+Netlify hosts the **web** demo only. For RN, load the same deployed origin in a WebView (e.g. `/api/react-web/floor-2d?embed=1`) so the session cookie stays on that origin.

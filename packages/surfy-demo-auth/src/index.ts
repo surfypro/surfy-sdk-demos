@@ -11,6 +11,11 @@ export {
   type SurfyApiConnectionString,
 } from './connectionString.js';
 export {
+  isDemoProxyBearer,
+  SURFY_DEMO_PROXY_BEARER,
+  SURFY_DEMO_SESSION_COOKIE,
+} from './demoSession.js';
+export {
   clearCachedSurfyAccessToken,
   fetchSurfyAccessToken,
   normalizeBaseUrl,

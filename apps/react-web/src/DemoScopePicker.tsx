@@ -1,11 +1,14 @@
 import type { DemoBuilding, DemoFloor } from './fetchDemoCatalog';
 
+export type DemoScopeVariant = 'floor' | 'building';
+
 interface DemoScopePickerProps {
   readonly buildings: readonly DemoBuilding[];
   readonly selectedBuildingId: number | undefined;
   readonly selectedFloorId: number | undefined;
   readonly onBuildingChange: (buildingId: number) => void;
   readonly onFloorChange: (floorId: number) => void;
+  readonly variant: DemoScopeVariant;
   readonly disabled?: boolean;
 }
 
@@ -17,12 +20,18 @@ function floorsForBuilding(
   return buildings.find((b) => b.id === buildingId)?.floors ?? [];
 }
 
+/**
+ * Reference buildings only (catalog already filtered).
+ * - building: pick a building (3D building view)
+ * - floor: pick building then floor (2D / floor 3D)
+ */
 export function DemoScopePicker({
   buildings,
   selectedBuildingId,
   selectedFloorId,
   onBuildingChange,
   onFloorChange,
+  variant,
   disabled = false,
 }: DemoScopePickerProps) {
   const floors = floorsForBuilding(buildings, selectedBuildingId);
@@ -30,7 +39,7 @@ export function DemoScopePicker({
   return (
     <div className="demo-scope" data-testid="demo-scope-picker">
       <label className="demo-scope__field">
-        <span>Bâtiment</span>
+        <span>Bâtiment de référence</span>
         <select
           data-testid="demo-building-select"
           disabled={disabled || buildings.length === 0}
@@ -49,25 +58,27 @@ export function DemoScopePicker({
         </select>
       </label>
 
-      <label className="demo-scope__field">
-        <span>Étage</span>
-        <select
-          data-testid="demo-floor-select"
-          disabled={disabled || floors.length === 0}
-          value={selectedFloorId ?? ''}
-          onChange={(event) => {
-            const id = Number(event.target.value);
-            if (Number.isFinite(id)) onFloorChange(id);
-          }}
-        >
-          {floors.length === 0 ? <option value="">Aucun étage</option> : null}
-          {floors.map((floor) => (
-            <option key={floor.id} value={floor.id}>
-              {floor.name} · niv. {floor.level} (#{floor.id})
-            </option>
-          ))}
-        </select>
-      </label>
+      {variant === 'floor' ? (
+        <label className="demo-scope__field">
+          <span>Étage</span>
+          <select
+            data-testid="demo-floor-select"
+            disabled={disabled || floors.length === 0}
+            value={selectedFloorId ?? ''}
+            onChange={(event) => {
+              const id = Number(event.target.value);
+              if (Number.isFinite(id)) onFloorChange(id);
+            }}
+          >
+            {floors.length === 0 ? <option value="">Aucun étage</option> : null}
+            {floors.map((floor) => (
+              <option key={floor.id} value={floor.id}>
+                {floor.name} · niv. {floor.level} (#{floor.id})
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
     </div>
   );
 }

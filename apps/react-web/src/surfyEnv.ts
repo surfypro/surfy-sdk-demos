@@ -1,30 +1,28 @@
 /**
- * Public (Vite) env helpers for the React web demo.
- * Never put SURFY_CONNECTION_STRING / client_secret here — only VITE_* values reach the browser.
+ * Client-side URL helpers for the React web demo.
+ *
+ * Browser → same origin only:
+ *   GET  /api/session   → HttpOnly cookie (Surfy JWT stays on server)
+ *   POST /api/v1/...    → proxy injects Bearer from SURFY_CONNECTION_STRING
  */
 
-/** API origin for the SDK. Empty → same origin (Netlify proxy to Surfy). */
+/** Origin passed to SDK web components (= page origin). */
 export function getSurfyDemoBaseUrl(): string {
-  const configured = import.meta.env.VITE_SURFY_BASE_URL?.trim();
-  if (configured) {
-    return configured.replace(/\/$/, '');
-  }
   if (typeof window !== 'undefined' && window.location?.origin) {
     return window.location.origin;
   }
   return '';
 }
 
-/** Token endpoint + optional public demo gate key (not the Surfy API secret). */
-export function getSurfyTokenUrl(): string {
-  const url = new URL('/api/surfy-token', getSurfyDemoBaseUrl() || 'http://localhost');
+export function getSurfySessionUrl(): string {
   const gate = import.meta.env.VITE_DEMO_GATE_KEY?.trim();
   if (gate) {
-    url.searchParams.set('key', gate);
+    return `/api/session?key=${encodeURIComponent(gate)}`;
   }
-  // When base is same-origin, use path-only for fetch
-  if (!import.meta.env.VITE_SURFY_BASE_URL?.trim()) {
-    return `${url.pathname}${url.search}`;
-  }
-  return url.toString();
+  return '/api/session';
+}
+
+export function getSurfyApiPath(path: string): string {
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return normalized.startsWith('/api/v1') ? normalized : `/api/v1${normalized}`;
 }

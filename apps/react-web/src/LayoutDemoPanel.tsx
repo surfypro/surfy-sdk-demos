@@ -1,170 +1,219 @@
-import { useEffect, useRef, useState } from 'react';
-import '@surfy/surfy-sdk';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type {
+  SurfyLayout,
+  SurfyLayout3dOptions,
+  SurfyRoomUpdateOptions,
+  SurfySdkErrorDetail,
+} from '@surfy/surfy-sdk';
+import { SurfySdk } from '@surfy/surfy-sdk';
 
+import { buildInitialBuilding3dOptions } from './building3dDemo.constants';
+import { Building3dDemoControls } from './Building3dDemoControls';
+import {
+  buildApiSnippetBlock,
+  snippetClearRoomColors,
+  snippetFitToView,
+  snippetSetOptions,
+  snippetSetRoomColors,
+  snippetUpdateRoom,
+} from './demoApiSnippets';
+import {
+  getConfiguredDemoRoomId,
+  pickRandomItem,
+  waitForDemoRoomId,
+} from './demoLayoutElement';
 import type { DemoSectionConfig } from './demoSections';
-import { isSectionTagRegistered } from './demoSections';
-import { getSurfyDemoBaseUrl, getSurfyTokenUrl } from './surfyEnv';
+import { isSectionKindRegistered } from './demoSections';
+import { getDemoThemeOptions } from './demoThemes';
+import { getDemoProxyBearer, type DemoFloor } from './fetchDemoCatalog';
+import { getSurfyDemoBaseUrl } from './surfyEnv';
+import { useDemoTheme } from './useDemoTheme';
 
 const DEMO_ROOM_COLOR = '#2196F3';
+const RANDOM_BLINK_INTERVAL_MS = 250;
+const API_LOG_MAX_LINES = 14;
 
-export type SurfyLayoutElement = HTMLElement & {
-  setAccessTokenProvider: (provider: () => Promise<string>) => void;
-  setRoomColors: (colors: Record<number, string>) => void;
-  clearRoomColors: () => void;
-};
-
-function getConfiguredDemoRoomId(): number | undefined {
-  const raw = import.meta.env.VITE_SURFY_DEMO_ROOM_ID;
-  if (!raw) return undefined;
-  const roomId = Number(raw);
-  return Number.isFinite(roomId) ? roomId : undefined;
-}
-
-function getFirstRenderedRoomId(element: SurfyLayoutElement): number | undefined {
-  const room = element.shadowRoot?.querySelector('[data-room-id]') as HTMLElement | null;
-  if (!room) return undefined;
-  const roomId = Number(room.dataset.roomId);
-  return Number.isFinite(roomId) ? roomId : undefined;
-}
-
-async function waitForDemoRoomId(element: SurfyLayoutElement, timeoutMs = 10_000): Promise<number | undefined> {
-  const configuredRoomId = getConfiguredDemoRoomId();
-  if (configuredRoomId !== undefined) {
-    return configuredRoomId;
-  }
-
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < timeoutMs) {
-    const roomId = getFirstRenderedRoomId(element);
-    if (roomId !== undefined) {
-      return roomId;
-    }
-    await new Promise((resolve) => window.setTimeout(resolve, 50));
-  }
-
-  return undefined;
-}
-
-function createLayoutElement(tag: string): SurfyLayoutElement | null {
-  const ctor = customElements.get(tag);
-  if (!ctor) {
-    return null;
-  }
-
-  return new (ctor as CustomElementConstructor)() as SurfyLayoutElement;
-}
-
-function getLayoutEntityId(section: DemoSectionConfig): string {
-  const raw = import.meta.env[section.envKey];
-  if (section.idAttribute === 'building-id') {
-    return String(raw ?? '1');
-  }
-  return String(raw ?? '42');
-}
+const RANDOM_ROOM_COLORS = [
+  '#e91e63',
+  '#9c27b0',
+  '#3f51b5',
+  '#03a9f4',
+  '#009688',
+  '#8bc34a',
+  '#ffc107',
+  '#ff5722',
+] as const;
 
 interface LayoutDemoPanelProps {
   readonly section: DemoSectionConfig;
   readonly active: boolean;
+  readonly tenant: string;
+  readonly entityId: number | undefined;
+  readonly buildingFloors?: readonly DemoFloor[];
 }
 
-export function LayoutDemoPanel({ section, active }: LayoutDemoPanelProps) {
+export function LayoutDemoPanel({
+  section,
+  active,
+  tenant,
+  entityId,
+  buildingFloors = [],
+}: LayoutDemoPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const layoutRef = useRef<SurfyLayoutElement | null>(null);
+  const layoutRef = useRef<SurfyLayout | null>(null);
   const [lastEvent, setLastEvent] = useState('none');
   const [demoRoomId, setDemoRoomId] = useState<number | undefined>(getConfiguredDemoRoomId());
-  const [fillParent, setFillParent] = useState(false);
-  const registered = isSectionTagRegistered(section.tag);
+  const [fillParent, setFillParent] = useState(true);
+  const [randomBlinkOn, setRandomBlinkOn] = useState(false);
+  const [lastBlink, setLastBlink] = useState<{ roomId: number; color: string } | null>(null);
+  const [apiLog, setApiLog] = useState<string[]>([]);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const apiLogTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const registered = isSectionKindRegistered(section.kind);
+  const { themeId } = useDemoTheme();
+  const isBuilding3d = section.id === 'building-3d';
+
+  const pushApiLine = useCallback((line: string) => {
+    setApiLog((prev) => [...prev, line].slice(-API_LOG_MAX_LINES));
+  }, []);
+
+  const apply3dOptions = useCallback(
+    (patch: SurfyLayout3dOptions) => {
+      layoutRef.current?.setOptions(patch);
+      pushApiLine(snippetSetOptions(JSON.stringify(patch)));
+    },
+    [pushApiLine],
+  );
+
+  const updateRoom = useCallback((roomId: number, options: SurfyRoomUpdateOptions) => {
+    layoutRef.current?.updateRoom(roomId, options);
+  }, []);
+
+  const fitToView = useCallback(() => {
+    layoutRef.current?.fitToView();
+    pushApiLine(snippetFitToView());
+  }, [pushApiLine]);
+
+  const logUpdateRoom = useCallback(
+    (roomId: number, optionsLiteral: string) => {
+      pushApiLine(snippetUpdateRoom(roomId, optionsLiteral));
+    },
+    [pushApiLine],
+  );
 
   useEffect(() => {
-    const element = layoutRef.current;
-    if (!element) return;
-
-    if (fillParent) {
-      element.setAttribute('fill-parent', '');
-    } else {
-      element.removeAttribute('fill-parent');
+    const el = apiLogTextareaRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
     }
+  }, [apiLog]);
+
+  useEffect(() => {
+    layoutRef.current?.setFillParent(fillParent);
   }, [fillParent]);
 
   useEffect(() => {
-    if (!active) return;
+    layoutRef.current?.setTheme(getDemoThemeOptions(themeId));
+  }, [themeId]);
+
+  useEffect(() => {
+    if (!randomBlinkOn) {
+      return;
+    }
+
+    const tick = () => {
+      const layout = layoutRef.current;
+      if (!layout) return;
+      const roomId = pickRandomItem(layout.getRenderedRoomIds());
+      const color = pickRandomItem(RANDOM_ROOM_COLORS);
+      if (roomId === undefined || color === undefined) return;
+      layout.setRoomColors({ [roomId]: color });
+      setLastBlink({ roomId, color });
+      setApiLog((prev) => [...prev, snippetSetRoomColors(roomId, color)].slice(-API_LOG_MAX_LINES));
+    };
+
+    tick();
+    const timer = window.setInterval(tick, RANDOM_BLINK_INTERVAL_MS);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [randomBlinkOn, active, entityId]);
+
+  useEffect(() => {
+    if (!active || entityId === undefined || !registered) return;
 
     const container = containerRef.current;
     if (!container) return;
 
-    const element = createLayoutElement(section.tag);
-    if (!element) {
-      return;
-    }
-
-    element.setAttribute(section.idAttribute, getLayoutEntityId(section));
-    element.setAttribute('tenant', import.meta.env.VITE_SURFY_TENANT ?? 'sandbox');
-    element.setAttribute('base-url', getSurfyDemoBaseUrl());
-
-    element.setAccessTokenProvider(async () => {
-      const gate = import.meta.env.VITE_DEMO_GATE_KEY?.trim();
-      const response = await fetch(getSurfyTokenUrl(), {
-        headers: gate ? { 'X-Surfy-Demo-Key': gate } : undefined,
-      });
-      if (!response.ok) {
-        const error = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(error?.error ?? `Token request failed (${response.status})`);
-      }
-      const data = (await response.json()) as { token: string };
-      return data.token;
+    const layout = SurfySdk.mount({
+      container,
+      kind: section.kind,
+      tenant,
+      baseUrl: getSurfyDemoBaseUrl(),
+      floorId: section.entityKind === 'floor' ? entityId : undefined,
+      buildingId: section.entityKind === 'building' ? entityId : undefined,
+      fillParent: true,
+      theme: getDemoThemeOptions(themeId),
+      options:
+        section.kind === 'building-3d'
+          ? buildInitialBuilding3dOptions(buildingFloors.map((floor) => floor.id))
+          : undefined,
+      getAccessToken: () => getDemoProxyBearer(),
+      onReady: () => {
+        setLastEvent('surfy:ready');
+        const current = layoutRef.current;
+        if (!current) return;
+        void waitForDemoRoomId(current).then((roomId) => {
+          if (roomId !== undefined) {
+            setDemoRoomId((prev) => prev ?? roomId);
+          }
+        });
+      },
+      onRoomHover: (detail) => {
+        setLastEvent(
+          detail ? `surfy:room-hover ${detail.roomId} ${detail.name}` : 'surfy:room-hover leave',
+        );
+      },
+      onRoomSelected: (detail) => {
+        setDemoRoomId(detail.roomId);
+        setLastEvent(`surfy:room-selected ${detail.roomId} ${detail.name}`);
+      },
+      onError: (detail: SurfySdkErrorDetail) => {
+        setLastEvent(`surfy:error ${detail.code} ${detail.message}`);
+      },
     });
 
-    const onReady = () => {
-      setLastEvent('surfy:ready');
-      void waitForDemoRoomId(element).then((roomId) => {
-        if (roomId !== undefined) {
-          setDemoRoomId((current) => current ?? roomId);
-        }
-      });
-    };
-    const onHover = (event: Event) => {
-      const detail = (event as CustomEvent<{ roomId: number; name: string } | null>).detail;
-      setLastEvent(detail ? `surfy:room-hover ${detail.roomId} ${detail.name}` : 'surfy:room-hover leave');
-    };
-    const onSelected = (event: Event) => {
-      const detail = (event as CustomEvent<{ roomId: number; name: string }>).detail;
-      setDemoRoomId(detail.roomId);
-      setLastEvent(`surfy:room-selected ${detail.roomId} ${detail.name}`);
-    };
-    const onError = (event: Event) => {
-      const detail = (event as CustomEvent<{ code: string; message: string }>).detail;
-      setLastEvent(`surfy:error ${detail.code} ${detail.message}`);
-    };
-
-    element.addEventListener('surfy:ready', onReady);
-    element.addEventListener('surfy:room-hover', onHover);
-    element.addEventListener('surfy:room-selected', onSelected);
-    element.addEventListener('surfy:error', onError);
-
-    container.appendChild(element);
-    layoutRef.current = element;
+    layoutRef.current = layout;
 
     return () => {
-      element.removeEventListener('surfy:ready', onReady);
-      element.removeEventListener('surfy:room-hover', onHover);
-      element.removeEventListener('surfy:room-selected', onSelected);
-      element.removeEventListener('surfy:error', onError);
-      element.remove();
+      setRandomBlinkOn(false);
+      setLastBlink(null);
+      setApiLog([]);
+      setCopyFeedback(null);
+      layout.destroy();
       layoutRef.current = null;
       setLastEvent('none');
     };
-  }, [active, section]);
+  }, [active, section, tenant, entityId, buildingFloors, themeId, registered]);
 
   if (!active) {
     return null;
   }
+
+  const entityAttr = section.entityKind === 'building' ? 'buildingId' : 'floorId';
 
   return (
     <section className="demo-section" data-testid={`demo-section-${section.id}`}>
       <header className="demo-section__header">
         <h2>{section.label}</h2>
         <p className="demo-section__tag">
-          <code>&lt;{section.tag}&gt;</code>
+          <code>SurfySdk.mount({'{'} kind: &apos;{section.kind}&apos; {'}'})</code>
+          {entityId !== undefined ? (
+            <>
+              {' '}
+              · {entityAttr}={entityId}
+            </>
+          ) : null}
         </p>
         <p className="demo-section__description">{section.description}</p>
       </header>
@@ -172,41 +221,140 @@ export function LayoutDemoPanel({ section, active }: LayoutDemoPanelProps) {
       {!registered ? (
         <div className="demo-section__unavailable" data-testid="demo-section-unavailable">
           <p>
-            Ce composant n'est pas encore enregistré dans le bundle SDK (phase 2 — moteur CubyV2).
-            La section sera activée automatiquement à la publication de <code>{section.tag}</code>.
+            Ce kind n&apos;est pas encore enregistré dans le bundle SDK (phase 2 — moteur CubyV2).
+            La section sera activée automatiquement à la publication de{' '}
+            <code>{section.kind}</code>.
           </p>
         </div>
+      ) : entityId === undefined ? (
+        <div className="demo-section__unavailable" data-testid="demo-section-no-entity">
+          <p>Sélectionnez un bâtiment et un étage dans la liste ci-dessus.</p>
+        </div>
       ) : (
-        <>
-          <p>
-            Last event: <span data-testid="demo-last-event">{lastEvent}</span>
-          </p>
-          <div className="actions">
-            <button
-              type="button"
-              disabled={demoRoomId === undefined}
-              onClick={() => {
-                if (demoRoomId !== undefined) {
-                  layoutRef.current?.setRoomColors({ [demoRoomId]: DEMO_ROOM_COLOR });
-                }
-              }}
-            >
-              {demoRoomId === undefined ? 'Color room' : `Color room ${demoRoomId}`}
-            </button>
-            <button type="button" onClick={() => layoutRef.current?.clearRoomColors()}>
-              Clear colors
-            </button>
+        <div className="demo-section__workspace">
+          <aside className="demo-section__sidebar" data-testid="demo-sidebar">
+            <p>
+              Last event: <span data-testid="demo-last-event">{lastEvent}</span>
+            </p>
+            <div className="actions">
+              <button
+                type="button"
+                data-testid="demo-color-room"
+                disabled={demoRoomId === undefined || randomBlinkOn}
+                onClick={() => {
+                  if (demoRoomId !== undefined) {
+                    layoutRef.current?.setRoomColors({ [demoRoomId]: DEMO_ROOM_COLOR });
+                    pushApiLine(snippetSetRoomColors(demoRoomId, DEMO_ROOM_COLOR));
+                  }
+                }}
+              >
+                {demoRoomId === undefined ? 'Color room' : `Color room ${demoRoomId}`}
+              </button>
+              <button
+                type="button"
+                data-testid="demo-random-blink"
+                aria-pressed={randomBlinkOn}
+                onClick={() => {
+                  setRandomBlinkOn((on) => {
+                    if (on) {
+                      layoutRef.current?.clearRoomColors();
+                      setLastBlink(null);
+                      pushApiLine(snippetClearRoomColors());
+                      return false;
+                    }
+                    return true;
+                  });
+                }}
+              >
+                {randomBlinkOn ? 'Stop random blink' : 'Random blink'}
+              </button>
+              <button
+                type="button"
+                data-testid="demo-clear-colors"
+                onClick={() => {
+                  setRandomBlinkOn(false);
+                  setLastBlink(null);
+                  layoutRef.current?.clearRoomColors();
+                  pushApiLine(snippetClearRoomColors());
+                }}
+              >
+                Clear colors
+              </button>
+              {isBuilding3d ? (
+                <button type="button" data-testid="demo-fit-to-view" onClick={fitToView}>
+                  Fit to view
+                </button>
+              ) : null}
+            </div>
+            {lastBlink ? (
+              <p className="demo-blink-status" data-testid="demo-blink-status">
+                Lit room{' '}
+                <code data-testid="demo-blink-room-id">{lastBlink.roomId}</code>
+                <span
+                  className="demo-blink-swatch"
+                  data-testid="demo-blink-color"
+                  style={{ backgroundColor: lastBlink.color }}
+                  title={lastBlink.color}
+                />
+                <code>{lastBlink.color}</code>
+              </p>
+            ) : null}
+            <label className="floor-plan-options">
+              <input
+                type="checkbox"
+                checked={fillParent}
+                onChange={(event) => setFillParent(event.target.checked)}
+              />
+              Remplir le conteneur parent
+            </label>
+
+            {isBuilding3d ? (
+              <Building3dDemoControls
+                buildingFloors={buildingFloors}
+                demoRoomId={demoRoomId}
+                onApplyOptions={apply3dOptions}
+                onUpdateRoom={updateRoom}
+                onFitToView={fitToView}
+                onLogUpdateRoom={logUpdateRoom}
+              />
+            ) : null}
+
+            <div className="demo-api-snippet" data-testid="demo-api-snippet">
+              <div className="demo-api-snippet__header">
+                <span>Appel SurfySdk — copiable</span>
+                <button
+                  type="button"
+                  data-testid="demo-api-snippet-copy"
+                  onClick={() => {
+                    const text = buildApiSnippetBlock(section.kind, apiLog);
+                    void navigator.clipboard.writeText(text).then(
+                      () => {
+                        setCopyFeedback('Copié');
+                        window.setTimeout(() => setCopyFeedback(null), 1500);
+                      },
+                      () => setCopyFeedback('Échec copie'),
+                    );
+                  }}
+                >
+                  {copyFeedback ?? 'Copier'}
+                </button>
+              </div>
+              <textarea
+                ref={apiLogTextareaRef}
+                className="demo-api-snippet__code"
+                data-testid="demo-api-snippet-textarea"
+                readOnly
+                spellCheck={false}
+                value={buildApiSnippetBlock(section.kind, apiLog)}
+                rows={Math.min(12, Math.max(4, apiLog.length + 8))}
+              />
+            </div>
+          </aside>
+
+          <div className="demo-section__map">
+            <div ref={containerRef} className="layout-host" data-testid="layout-host" />
           </div>
-          <label className="floor-plan-options">
-            <input
-              type="checkbox"
-              checked={fillParent}
-              onChange={(event) => setFillParent(event.target.checked)}
-            />
-            Remplir le conteneur parent
-          </label>
-          <div ref={containerRef} className="layout-host" data-testid="layout-host" />
-        </>
+        </div>
       )}
     </section>
   );

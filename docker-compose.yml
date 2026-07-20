@@ -10,8 +10,6 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        # Baked into the browser bundle at image build time
-        VITE_SURFY_BASE_URL: ${VITE_SURFY_BASE_URL:-}
         VITE_DEMO_GATE_KEY: ${VITE_DEMO_GATE_KEY:-}
     ports:
       - "${DEMOS_PORT:-8080}:8080"

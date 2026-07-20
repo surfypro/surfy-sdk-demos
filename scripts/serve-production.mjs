@@ -26,6 +26,7 @@ function loadHandler(name) {
 
 const handlers = {
   health: loadHandler('health'),
+  'surfy-session': loadHandler('surfy-session'),
   'surfy-token': loadHandler('surfy-token'),
   'surfy-api-proxy': loadHandler('surfy-api-proxy'),
 };
@@ -96,8 +97,8 @@ const server = createServer(async (req, res) => {
       const out = await invoke(handlers.health, toNetlifyEvent(req, url, body));
       return writeHandlerResult(res, out);
     }
-    if (url.pathname === '/api/surfy-token') {
-      const out = await invoke(handlers['surfy-token'], toNetlifyEvent(req, url, body));
+    if (url.pathname === '/api/session' || url.pathname === '/api/surfy-token') {
+      const out = await invoke(handlers['surfy-session'], toNetlifyEvent(req, url, body));
       return writeHandlerResult(res, out);
     }
     if (url.pathname.startsWith('/api/v1/')) {

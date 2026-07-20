@@ -1,12 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { attachBrowserErrorCollector } from './helpers';
-
-const hasSdkCredentials = Boolean(
-  process.env.VITE_SURFY_BASE_URL &&
-    process.env.VITE_SURFY_TENANT &&
-    process.env.VITE_SURFY_FLOOR_ID &&
-    (process.env.SURFY_CLIENT_SECRET || process.env.VITE_SURFY_TOKEN),
-);
+import { hasSurfySdkCredentials, SDK_CREDENTIALS_HINT } from './credentials';
+import { attachBrowserErrorCollector, DEFAULT_DEMO_URL } from './helpers';
 
 async function waitForSdkOutcome(page: import('@playwright/test').Page) {
   const lastEvent = page.locator('p', { hasText: 'Last event:' });
@@ -23,18 +17,16 @@ async function waitForSdkOutcome(page: import('@playwright/test').Page) {
 }
 
 test.describe('Surfy SDK integration', () => {
-  test.skip(
-    !hasSdkCredentials,
-    'Set VITE_SURFY_* in apps/react-web/.env and SURFY_CLIENT_SECRET in apps/demo-server/.env.',
-  );
+  test.skip(!hasSurfySdkCredentials(), SDK_CREDENTIALS_HINT);
 
   test('loads the floor plan without JavaScript errors and emits surfy:ready', async ({ page }) => {
     test.setTimeout(90_000);
 
     const errors = attachBrowserErrorCollector(page);
 
-    await page.goto('/');
+    await page.goto(DEFAULT_DEMO_URL);
 
+    await expect(page.getByTestId('demo-scope-picker')).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('surfy-floor-layout-2d')).toBeVisible();
     await waitForSdkOutcome(page);
     errors.assertNoJsErrors();

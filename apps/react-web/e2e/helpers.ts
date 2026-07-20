@@ -9,6 +9,10 @@ type BrowserErrorCollector = {
 
 export const DEMO_ROOM_COLOR = '#2196F3';
 export const DEFAULT_ROOM_FILL = '#e8e8e8';
+/** Default SPA entry after `/` redirect. */
+export const DEFAULT_DEMO_URL = '/api/react-web/floor-2d';
+export const BUILDING_3D_DEMO_URL = '/api/react-web/building-3d';
+export const FLOOR_3D_DEMO_URL = '/api/react-web/floor-3d';
 
 type SurfyLayoutElement = HTMLElement & {
   setRoomColors: (colors: Record<number, string>) => void;
@@ -92,8 +96,8 @@ export async function getFirstRenderedRoomId(page: Page): Promise<number> {
 
 export async function getRoomFill(page: Page, roomId: number): Promise<string> {
   return page.locator('surfy-floor-layout-2d').evaluate((element, id) => {
-    const polygon = element.shadowRoot?.querySelector(`[data-room-id="${id}"] polygon`);
-    if (!polygon) {
+    const polygon = element.shadowRoot?.querySelector(`[data-room-id="${id}"]`);
+    if (!polygon || polygon.tagName.toLowerCase() !== 'polygon') {
       throw new Error(`Room ${id} polygon not found`);
     }
     return polygon.getAttribute('fill') ?? '';

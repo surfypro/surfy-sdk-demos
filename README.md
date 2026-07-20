@@ -2,8 +2,8 @@
 
 Monorepo for SDK integration demos:
 
-- `apps/react-web` — **active** (floor 2D, building 3D, floor 3D when registered)
-- `apps/react-native` — next target (WebView → same SDK)
+- `apps/react-web` — **active** (React web + simulateur React Native WebView sur le même site)
+- `apps/react-native` — cible device/Expo plus tard (voir README ; simulateur déjà dans react-web)
 - `apps/demo-server` — local token proxy
 - `netlify/` — production token + API proxy for Netlify
 
@@ -34,7 +34,7 @@ Full guide: **[docs/NETLIFY.md](docs/NETLIFY.md)**.
 Summary:
 
 1. Connect this repo to Netlify (`netlify.toml` is ready).
-2. Set build vars: `VITE_SURFY_BASE_URL=` (empty) + optional `VITE_DEMO_GATE_KEY`.
+2. Set optional build var: `VITE_DEMO_GATE_KEY` (browser always uses site origin for `/api/*`).
 3. Set function secret: `SURFY_CONNECTION_STRING=host=…;client_id=…;client_secret=…`.
 4. Strongly recommended: `DEMO_GATE_KEY` + `VITE_DEMO_GATE_KEY`, and/or Netlify password protection.
 
@@ -55,6 +55,19 @@ docker compose up --build   # http://localhost:8080
 ## Documentation (intégrateurs)
 
 Guide développeur officiel : [surfy-help — Surfy SDK](https://help.surfy.pro/entities/sdk/).
+
+## Qualité de code (équipe Surfy)
+
+Conventions demos (types SDK, couches, taille des fichiers, checklist PR) : **[docs/CODE_QUALITY.md](docs/CODE_QUALITY.md)**.
+
+Avant une PR demos :
+
+```bash
+pnpm quality                # lint + build react-web + typecheck demo-server
+pnpm scan:secrets
+```
+
+Voir aussi le script `quality` dans `package.json`.
 
 ## Security scanning (public-ready)
 

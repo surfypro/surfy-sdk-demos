@@ -8,11 +8,9 @@ RUN corepack enable && corepack prepare pnpm@11.10.0 --activate
 
 WORKDIR /app
 
-# Public Vite env must be available at build time (never put client_secret in VITE_*).
-ARG VITE_SURFY_BASE_URL=
+# Optional public Vite env at build time (never put client_secret in VITE_*).
 ARG VITE_DEMO_GATE_KEY=
-ENV VITE_SURFY_BASE_URL=$VITE_SURFY_BASE_URL \
-    VITE_DEMO_GATE_KEY=$VITE_DEMO_GATE_KEY
+ENV VITE_DEMO_GATE_KEY=$VITE_DEMO_GATE_KEY
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps ./apps

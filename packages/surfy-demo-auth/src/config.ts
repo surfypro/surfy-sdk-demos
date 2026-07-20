@@ -16,9 +16,9 @@ function readBooleanEnv(env: NodeJS.ProcessEnv, name: string, fallback = false):
 }
 
 function readDiscreteAuthEnv(env: NodeJS.ProcessEnv): SurfyDemoAuthEnv | null {
-  const baseUrl = env.SURFY_BASE_URL ?? env.VITE_SURFY_BASE_URL;
-  const clientId = env.SURFY_CLIENT_ID ?? env.VITE_SURFY_TENANT;
-  const clientSecret = env.SURFY_CLIENT_SECRET ?? env.VITE_SURFY_TOKEN;
+  const baseUrl = env.SURFY_BASE_URL;
+  const clientId = env.SURFY_CLIENT_ID;
+  const clientSecret = env.SURFY_CLIENT_SECRET;
   if (!baseUrl || !clientId || !clientSecret) {
     return null;
   }

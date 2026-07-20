@@ -13,6 +13,7 @@ echo "-> bundling Netlify functions with esbuild (platform=node)"
 
 pnpm exec esbuild \
   "netlify/functions/health.ts" \
+  "netlify/functions/surfy-session.ts" \
   "netlify/functions/surfy-token.ts" \
   "netlify/functions/surfy-api-proxy.ts" \
   --bundle \

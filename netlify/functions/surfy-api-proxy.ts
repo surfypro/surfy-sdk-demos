@@ -1,9 +1,25 @@
 import type { Handler, HandlerEvent } from '@netlify/functions';
-import { loadSurfyDemoAuthEnv, normalizeBaseUrl } from '@surfy/surfy-demo-auth';
+import {
+  fetchSurfyAccessToken,
+  isDemoProxyBearer,
+  loadSurfyDemoAuthEnv,
+  normalizeBaseUrl,
+  SURFY_DEMO_SESSION_COOKIE,
+} from '@surfy/surfy-demo-auth';
+
+function readCookie(event: HandlerEvent, name: string): string | undefined {
+  const raw = event.headers.cookie ?? event.headers.Cookie;
+  if (!raw) return undefined;
+  for (const part of raw.split(';')) {
+    const [key, ...rest] = part.trim().split('=');
+    if (key === name) return decodeURIComponent(rest.join('='));
+  }
+  return undefined;
+}
 
 /**
- * Proxies /api/v1/* to Surfy so the browser stays same-origin
- * (no Surfy CORS allowlist required for the Netlify domain).
+ * Proxies /api/v1/* → Surfy and injects the API Bearer from SURFY_CONNECTION_STRING.
+ * Browser never receives the Surfy JWT (session cookie + opaque proxy bearer only).
  */
 export const handler: Handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -12,6 +28,14 @@ export const handler: Handler = async (event) => {
 
   try {
     const authEnv = loadSurfyDemoAuthEnv();
+    if (!readCookie(event, SURFY_DEMO_SESSION_COOKIE)) {
+      return {
+        statusCode: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+        body: JSON.stringify({ error: 'Demo session required — call GET /api/session first' }),
+      };
+    }
+
     const upstreamPath = resolveUpstreamPath(event);
     const url = new URL(upstreamPath, `${normalizeBaseUrl(authEnv.baseUrl)}/`);
 
@@ -20,12 +44,32 @@ export const handler: Handler = async (event) => {
     }
 
     const headers = new Headers();
-    copyRequestHeader(event, headers, 'authorization');
     copyRequestHeader(event, headers, 'content-type');
     copyRequestHeader(event, headers, 'accept');
     copyRequestHeader(event, headers, 'accept-language');
     copyRequestHeader(event, headers, 'x-tenant');
     copyRequestHeader(event, headers, 'x-surfy-sdk-version');
+    if (!headers.has('x-tenant')) {
+      headers.set('x-tenant', authEnv.clientId);
+    }
+
+    const incomingAuth =
+      event.headers.authorization ?? event.headers.Authorization ?? undefined;
+    if (incomingAuth && !isDemoProxyBearer(incomingAuth)) {
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+        body: JSON.stringify({ error: 'Use session proxy bearer only (surfy-demo-proxy)' }),
+      };
+    }
+
+    const token = await fetchSurfyAccessToken({
+      baseUrl: authEnv.baseUrl,
+      clientId: authEnv.clientId,
+      clientSecret: authEnv.clientSecret,
+      tlsInsecure: authEnv.tlsInsecure,
+    });
+    headers.set('authorization', `Bearer ${token}`);
 
     const init: RequestInit = {
       method: event.httpMethod,
@@ -70,11 +114,6 @@ function resolveUpstreamPath(event: HandlerEvent): string {
     return `/api/v1/${path.slice(marker.length)}`;
   }
 
-  const alt = '/.netlify/functions/surfy-api-proxy';
-  if (path === alt) {
-    throw new Error('Missing /api/v1 path splat for surfy-api-proxy');
-  }
-
   throw new Error(`Unable to resolve upstream path from ${path}`);
 }
 
@@ -87,7 +126,6 @@ function copyRequestHeader(event: HandlerEvent, headers: Headers, name: string):
 
 function corsHeaders(): Record<string, string> {
   return {
-    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers':
       'Content-Type, Authorization, x-tenant, accept-language, X-Surfy-Sdk-Version, X-Surfy-Demo-Key',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',

@@ -1,4 +1,6 @@
-import { getSurfyDemoBaseUrl, getSurfyTokenUrl } from './surfyEnv';
+import { SURFY_DEMO_PROXY_BEARER } from '@surfy/surfy-demo-auth/session';
+
+import { getSurfyApiPath, getSurfySessionUrl } from './surfyEnv';
 
 export type DemoFloor = {
   readonly id: number;
@@ -17,9 +19,9 @@ export type DemoCatalog = {
   readonly buildings: readonly DemoBuilding[];
 };
 
-type TokenResponse = {
-  token: string;
-  tenant?: string;
+type SessionResponse = {
+  tenant: string;
+  authMode?: string;
 };
 
 type FloorDto = {
@@ -38,6 +40,8 @@ type EntitiesResponse = {
   entities?: BuildingDto[];
 };
 
+let sessionTenant: string | null = null;
+
 function mapFloors(floors: BuildingDto['floors']): DemoFloor[] {
   const list = Array.isArray(floors) ? floors : (floors?.entities ?? []);
   return list
@@ -49,40 +53,54 @@ function mapFloors(floors: BuildingDto['floors']): DemoFloor[] {
     .toSorted((a, b) => a.level - b.level || a.name.localeCompare(b.name));
 }
 
-async function fetchDemoAccess(tokenUrl: string): Promise<TokenResponse> {
+function gateHeaders(): HeadersInit | undefined {
   const gate = import.meta.env.VITE_DEMO_GATE_KEY?.trim();
-  const response = await fetch(tokenUrl, {
-    headers: gate ? { 'X-Surfy-Demo-Key': gate } : undefined,
-  });
-  if (!response.ok) {
-    const error = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(error?.error ?? `Token request failed (${response.status})`);
-  }
-  return (await response.json()) as TokenResponse;
+  return gate ? { 'X-Surfy-Demo-Key': gate } : undefined;
 }
 
 /**
- * Live catalog for the demo picker — buildings + floors (reference buildings only).
- * Auth via /api/surfy-token; data via POST /api/v1/data/entities (same-origin proxy on Netlify).
+ * Opens API-mode session (HttpOnly cookie). Surfy JWT never enters JS.
+ */
+export async function ensureDemoSession(): Promise<{ tenant: string }> {
+  if (sessionTenant) {
+    return { tenant: sessionTenant };
+  }
+  const response = await fetch(getSurfySessionUrl(), {
+    credentials: 'include',
+    headers: gateHeaders(),
+  });
+  if (!response.ok) {
+    const error = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(error?.error ?? `Session failed (${response.status})`);
+  }
+  const data = (await response.json()) as SessionResponse;
+  if (!data.tenant) {
+    throw new Error('Session response missing tenant');
+  }
+  sessionTenant = data.tenant;
+  return { tenant: data.tenant };
+}
+
+/** Opaque bearer for the SDK — proxy swaps it for the real Surfy JWT. */
+export async function getDemoProxyBearer(): Promise<string> {
+  await ensureDemoSession();
+  return SURFY_DEMO_PROXY_BEARER;
+}
+
+/**
+ * Live catalog — reference buildings + floors.
+ * Auth: session cookie + proxy (no Surfy token in the browser).
  */
 export async function fetchDemoCatalog(): Promise<DemoCatalog> {
-  const baseUrl = getSurfyDemoBaseUrl();
-  const { token, tenant } = await fetchDemoAccess(getSurfyTokenUrl());
-  if (!tenant) {
-    throw new Error('Token response missing tenant (update demo-server / Netlify surfy-token)');
-  }
+  const { tenant } = await ensureDemoSession();
 
-  const entitiesUrl = new URL('/api/v1/data/entities?buildings', `${baseUrl || 'http://localhost'}/`);
-  const path = import.meta.env.VITE_SURFY_BASE_URL?.trim()
-    ? entitiesUrl.toString()
-    : `${entitiesUrl.pathname}${entitiesUrl.search}`;
-
-  const response = await fetch(path, {
+  const response = await fetch(getSurfyApiPath('/api/v1/data/entities?buildings'), {
     method: 'POST',
+    credentials: 'include',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${SURFY_DEMO_PROXY_BEARER}`,
       'x-tenant': tenant,
     },
     body: JSON.stringify({
@@ -97,7 +115,6 @@ export async function fetchDemoCatalog(): Promise<DemoCatalog> {
             order: 'level asc',
           },
         ],
-        // Reference buildings only (exclude scenario clones)
         filters: [{ operator: 'is', column: 'buildingId', value: null }],
         order: 'name asc',
         pagination: { limit: 200 },
@@ -118,9 +135,4 @@ export async function fetchDemoCatalog(): Promise<DemoCatalog> {
   }));
 
   return { tenant, buildings };
-}
-
-export async function fetchSurfyDemoToken(): Promise<string> {
-  const { token } = await fetchDemoAccess(getSurfyTokenUrl());
-  return token;
 }

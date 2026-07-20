@@ -18,7 +18,8 @@
     "test:e2e:ui": "pnpm --filter react-web test:e2e:ui",
     "sync:sdk": "bash scripts/sync-local-sdk.sh",
     "install:all": "pnpm install -r",
-    "scan:secrets": "bash scripts/scan-secrets.sh"
+    "scan:secrets": "bash scripts/scan-secrets.sh",
+    "quality": "pnpm --filter react-web lint && pnpm --filter react-web build && pnpm --filter demo-server typecheck"
   },
   "dependencies": {
     "@surfy/surfy-demo-auth": "workspace:*"

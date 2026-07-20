@@ -1,10 +1,22 @@
-# React Native Demo (planned)
+# React Native demo (WebView path)
 
-This app is the second SDK target after `apps/react-web`.
+The **same** UI as React web lives in `apps/react-web/src/DemoWorkbench.tsx`.
 
-Planned setup:
-- React Native + `react-native-webview`
-- Wrapper package `@surfy/surfy-sdk/react-native`
-- Same token flow as web demo via shared mock server
+On the Vite site:
 
-Initial implementation is intentionally postponed while we stabilize React web test flows.
+1. `pnpm dev` → http://localhost:5173 → redirects to `/api/react-web/floor-2d`
+2. Open `/api/react-native/building-3d` (or use the host tabs) → phone chrome + iframe
+3. Iframe loads `/api/react-web/<section>?embed=1` (same workbench, embed chrome)
+
+```text
+/:authMode/:host/:section
+  api | oauth
+    react-web | react-native
+      floor-2d | floor-3d | building-3d
+
+RN shell (native UI)          ← simulated by phone chrome
+  └─ react-native-webview     ← iframe
+       └─ DemoWorkbench       ← shared with React web
+```
+
+No APK required. Real Expo app later can point `WebView` at e.g. `/api/react-web/floor-2d?embed=1` (Netlify or LAN).

@@ -4,8 +4,8 @@ export function hasSurfySdkCredentials(): boolean {
     return true;
   }
   return Boolean(
-    (process.env.SURFY_BASE_URL || process.env.VITE_SURFY_BASE_URL) &&
-      (process.env.SURFY_CLIENT_ID || process.env.VITE_SURFY_TENANT) &&
+    process.env.SURFY_BASE_URL &&
+      process.env.SURFY_CLIENT_ID &&
       (process.env.SURFY_CLIENT_SECRET || process.env.VITE_SURFY_TOKEN),
   );
 }

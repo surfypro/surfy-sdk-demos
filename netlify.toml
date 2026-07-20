@@ -9,7 +9,7 @@
 [build.environment]
   NODE_VERSION = "22"
   # Set env in the Netlify UI (see docs/NETLIFY.md / .env.netlify.example).
-  # Prefer empty VITE_SURFY_BASE_URL so the app uses same-origin + /api/v1 proxy.
+  # Browser uses site origin for /api/* (no VITE_SURFY_BASE_URL).
   # Secrets: SURFY_CONNECTION_STRING=host=…;client_id=…;client_secret=…
   # Skip nested install inside build:netlify (already installed above).
   SKIP_PNPM_INSTALL = "1"
@@ -27,14 +27,21 @@
   status = 200
   force = true
 
-# Token mint (server-side secrets)
+# API-mode session (HttpOnly cookie; Surfy JWT stays server-side)
 [[redirects]]
-  from = "/api/surfy-token"
-  to = "/.netlify/functions/surfy-token"
+  from = "/api/session"
+  to = "/.netlify/functions/surfy-session"
   status = 200
   force = true
 
-# Proxy Surfy REST to alpha/prod (avoids browser CORS)
+# Legacy alias → same session handler
+[[redirects]]
+  from = "/api/surfy-token"
+  to = "/.netlify/functions/surfy-session"
+  status = 200
+  force = true
+
+# Proxy Surfy REST — Bearer injected server-side
 [[redirects]]
   from = "/api/v1/*"
   to = "/.netlify/functions/surfy-api-proxy/:splat"

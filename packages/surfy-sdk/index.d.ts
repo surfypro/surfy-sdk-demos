@@ -27,12 +27,123 @@ export interface SurfySdkErrorDetail {
 	readonly code: SurfySdkErrorCode;
 	readonly message: string;
 }
-/** Shared imperative API for all layout Web Components (2D + 3D). */
+/** Wall rendering mode for 3D layout elements (Cuby modes). */
+export type SurfyLayout3dWallMode = "no" | "half" | "reality" | "cuby" | "cuby-reality-selected" | "no-wall-selected";
+/** Camera control scheme when one vs several floors are visible. */
+export type SurfyLayout3dControls = "map" | "orbit" | "building";
+/** Default camera framing when fitting the scene. */
+export type SurfyLayout3dZoomMode = "isometric" | "zenith";
+/** Navigation preset applied when one floor is selected vs several. */
+export interface SurfyLayout3dNavigationOptions {
+	readonly controls?: SurfyLayout3dControls;
+	readonly zoomMode?: SurfyLayout3dZoomMode;
+}
+/** Imperative 3D display options for {@link SurfyLayoutElement.setOptions}. */
+export interface SurfyLayout3dOptions {
+	/** Vertical spacing between floors in the building scene (pixels). Default `240`. */
+	readonly floorSpace?: number;
+	readonly showRoomLabels?: boolean;
+	readonly showFloorLabels?: boolean;
+	/** Building rotation around Z axis in degrees. Default `0`. */
+	readonly buildingRotationZ?: number;
+	/** Floor ids to display; omit to show all floors from layout data. */
+	readonly selectedFloorIds?: readonly number[];
+	/** Default `cuby` in the SDK embed. */
+	readonly wallMode?: SurfyLayout3dWallMode;
+	/**
+	 * Show building structure meshes (ground + walls when created at load).
+	 * Default `false`. Set before first render to include structure wall geometry.
+	 */
+	readonly showStructureWalls?: boolean;
+	/**
+	 * Floor ids whose structure is visible when `showStructureWalls` is true.
+	 * Omit to show structure on all visible floors.
+	 */
+	readonly structureFloorIds?: readonly number[];
+	/** Navigation when a single floor is selected. Default `{ controls: 'map', zoomMode: 'zenith' }`. */
+	readonly singleFloorNavigation?: SurfyLayout3dNavigationOptions;
+	/** Navigation when several floors are selected. Default `{ controls: 'building', zoomMode: 'isometric' }`. */
+	readonly multiFloorNavigation?: SurfyLayout3dNavigationOptions;
+}
+/**
+ * Partial per-room update for {@link SurfyLayoutElement.updateRoom} / SurfySdk layout handle.
+ * Only provided keys are applied; others keep their current override.
+ */
+export interface SurfyRoomUpdateOptions {
+	/** CSS color. Pass `null` to remove this room from color overrides. */
+	readonly color?: string | null;
+	/** Show / hide the room name label (3D Cuby). */
+	readonly showLabel?: boolean;
+}
+/** Layout kind for {@link SurfySdk.mount}. */
+export type SurfyLayoutKind = "floor-2d" | "floor-3d" | "building-3d";
+/**
+ * Options for {@link SurfySdk.mount}.
+ * Provide `floorId` for floor layouts, `buildingId` for building-3d.
+ */
+export interface SurfyLayoutMountOptions {
+	/** Host node or CSS selector where the layout is mounted. */
+	readonly container: HTMLElement | string;
+	readonly kind: SurfyLayoutKind;
+	readonly tenant: string;
+	/** Surfy API origin without trailing slash. */
+	readonly baseUrl: string;
+	readonly floorId?: number;
+	readonly buildingId?: number;
+	readonly locale?: string;
+	/** Default `true`. */
+	readonly fillParent?: boolean;
+	readonly getAccessToken: () => Promise<string>;
+	readonly theme?: SurfyThemeOptions | null;
+	readonly options?: SurfyLayout3dOptions;
+	readonly onReady?: (detail: SurfyFloorLayout2dReadyDetail | SurfyFloorLayout3dReadyDetail | SurfyBuildingLayout3dReadyDetail) => void;
+	readonly onRoomHover?: (detail: SurfyRoomHoverDetail) => void;
+	readonly onRoomSelected?: (detail: SurfyRoomSelectedDetail) => void;
+	readonly onError?: (detail: SurfySdkErrorDetail) => void;
+}
+/** Shared imperative API for all layout Web Components (2D + 3D). Prefer {@link SurfySdk.mount}. */
 export interface SurfyLayoutElement extends HTMLElement {
 	setAccessTokenProvider(provider: () => Promise<string>): void;
 	setRoomColors(colors: Record<number, string>): void;
 	clearRoomColors(): void;
+	/**
+	 * Apply a host-provided MUI theme override (primary / tooltip / surfaces).
+	 * Pass `null` / omit to reset to the SDK default (classic light blue).
+	 * Theme presets live in the host app — not inside the SDK.
+	 */
+	setTheme(theme?: SurfyThemeOptions | null): void;
+	/**
+	 * Merge 3D display options (floor spacing, labels, rotation, floor selection, wall mode).
+	 * No-op on 2D elements until floor 3D ships.
+	 */
+	setOptions(options: SurfyLayout3dOptions): void;
+	/** Re-center the camera on the current scene bounds. No-op on 2D until implemented. */
+	fitToView(): void;
+	/**
+	 * Update one room with several options at once (color, label visibility).
+	 * Partial merge — only supplied keys change.
+	 */
+	updateRoom(roomId: number, options: SurfyRoomUpdateOptions): void;
 }
+/** Host-supplied theme knobs for {@link SurfyLayoutElement.setTheme} / React `themeOptions`. */
+export type SurfyThemeOptions = {
+	readonly mode?: "light" | "dark";
+	readonly primary?: {
+		readonly main: string;
+		readonly light?: string;
+		readonly dark?: string;
+		readonly contrastText?: string;
+	};
+	readonly tooltip?: {
+		readonly backgroundColor?: string;
+		readonly color?: string;
+		readonly fontSize?: number | string;
+	};
+	readonly background?: {
+		readonly default?: string;
+		readonly paper?: string;
+	};
+};
 export interface SurfyFloorLayout2dReadyDetail {
 	readonly floorId: number;
 }
@@ -42,25 +153,34 @@ export interface SurfyFloorLayout3dReadyDetail {
 export interface SurfyBuildingLayout3dReadyDetail {
 	readonly buildingId: number;
 }
-/**
- * @deprecated Use {@link SurfyFloorLayout2dReadyDetail}.
- */
-export type SurfyFloorPlanReadyDetail = SurfyFloorLayout2dReadyDetail;
 export interface SurfyRoomSelectedDetail {
 	readonly roomId: number;
 	readonly name: string;
 }
 export type SurfyRoomHoverDetail = SurfyRoomSelectedDetail | null;
-/** Phase 2 — options merged imperatively. */
-export interface SurfyFloorPlanOptions {
-	readonly showLegend?: boolean;
-	readonly locale?: string;
-}
-/** @deprecated Use {@link SurfyLayoutElement}. */
-export type SurfyFloorPlanElement = SurfyLayoutElement;
 export type SurfyFloorLayout2dElement = SurfyLayoutElement;
 export type SurfyFloorLayout3dElement = SurfyLayoutElement;
 export type SurfyBuildingLayout3dElement = SurfyLayoutElement;
+export type SurfyLayoutReadyDetail = SurfyFloorLayout2dReadyDetail | SurfyFloorLayout3dReadyDetail | SurfyBuildingLayout3dReadyDetail;
+/** High-level layout handle — preferred public API over raw Web Components. */
+export interface SurfyLayout {
+	readonly kind: SurfyLayoutKind;
+	readonly tag: string;
+	/** Underlying custom element (escape hatch for tests / advanced DOM). */
+	readonly element: SurfyLayoutElement;
+	setAccessTokenProvider(provider: () => Promise<string>): void;
+	setRoomColors(colors: Record<number, string>): void;
+	clearRoomColors(): void;
+	setTheme(theme?: SurfyThemeOptions | null): void;
+	setOptions(options: SurfyLayout3dOptions): void;
+	fitToView(): void;
+	updateRoom(roomId: number, options: SurfyRoomUpdateOptions): void;
+	setFillParent(fill: boolean): void;
+	/** Update `floor-id` or `building-id` according to {@link SurfyLayout.kind}. */
+	setEntityId(entityId: number): void;
+	getRenderedRoomIds(): number[];
+	destroy(): void;
+}
 export interface IFetchBuildingLayoutParams {
 	readonly baseUrl: string;
 	readonly tenant: string;
@@ -80,20 +200,21 @@ export interface IFetchFloorLayoutParams {
 }
 export declare function fetchFloorLayoutData(params: IFetchFloorLayoutParams): Promise<IEmbedLayoutViewData>;
 /** Published SDK semver — bump on public API changes. */
-export declare const SURFY_SDK_VERSION = "0.1.0";
+export declare const SURFY_SDK_VERSION = "0.2.0";
 /** 2D floor layout Web Component (phase 1b). */
 export declare const SURFY_FLOOR_LAYOUT_2D_TAG = "surfy-floor-layout-2d";
 /** 3D floor layout Web Component — CubyV2 (phase 2). */
 export declare const SURFY_FLOOR_LAYOUT_3D_TAG = "surfy-floor-layout-3d";
 /** 3D building layout Web Component — CubyV2 (phase 2). */
 export declare const SURFY_BUILDING_LAYOUT_3D_TAG = "surfy-building-layout-3d";
-/**
- * @deprecated Use {@link SURFY_FLOOR_LAYOUT_2D_TAG}.
- */
-export declare const SURFY_FLOOR_PLAN_TAG = "surfy-floor-plan";
-/** Registers layout Web Components (`surfy-floor-layout-2d`, `surfy-building-layout-3d`, deprecated `surfy-floor-plan`). */
+/** Registers layout Web Components (`surfy-floor-layout-2d`, `surfy-building-layout-3d`). */
 export declare function registerSurfyLayoutElements(): void;
-/** @deprecated Use {@link registerSurfyLayoutElements}. */
-export declare function registerSurfyFloorPlanElement(): void;
+/** Global Surfy SDK facade — runtime value from the ESM bundle. */
+export declare const SurfySdk: {
+	readonly version: string;
+	tagForKind(kind: SurfyLayoutKind): string;
+	isKindRegistered(kind: SurfyLayoutKind): boolean;
+	mount(options: SurfyLayoutMountOptions): SurfyLayout;
+};
 
 export {};
