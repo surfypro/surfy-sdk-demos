@@ -1,7 +1,7 @@
 {
   "name": "surfy-sdk-demos",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Public demo apps for Surfy SDK (React + React Native targets).",
   "packageManager": "pnpm@11.10.0",
   "scripts": {
