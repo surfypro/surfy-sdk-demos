@@ -2,94 +2,51 @@
 
 [![CI](https://github.com/surfypro/surfy-sdk-demos/actions/workflows/ci.yml/badge.svg)](https://github.com/surfypro/surfy-sdk-demos/actions/workflows/ci.yml)
 
-Monorepo for SDK integration demos:
+Monorepo containing integration demos for the Surfy SDK.
 
-- `apps/react-web` — **active** (React web + simulateur React Native WebView sur le même site)
-- `apps/react-native` — cible device/Expo plus tard (voir README ; simulateur déjà dans react-web)
-- `apps/demo-server` — local token proxy
-- `netlify/` — production token + API proxy for Netlify
+| App | Description |
+|-----|-------------|
+| `apps/react-web` | React web demo — floor 2D, building 3D, data API, React Native WebView simulator |
+| `apps/demo-server` | Token proxy (local dev server) |
+| `netlify/` | Token + API proxy for Netlify deployment |
 
-## Local setup
+## Developer documentation (SDK integrators)
 
-1. Build SDK in Surfy worktree:
-   - `/Users/pouya/dev/surfy/surfy-worktrees/wt-ado-389-surfy-sdk`
-   - run `pnpm build:sdk`
-2. Sync bundle into this monorepo:
-   - `pnpm sync:sdk`
-3. Install deps:
-   - `pnpm install`
-4. Configure env:
-   - `apps/react-web/.env` from `.env.example` (public `VITE_*` only — no floor/building IDs)
-   - `apps/demo-server/.env` from `.env.example` with **`SURFY_CONNECTION_STRING`**:
-     `host=https://…;client_id=…;client_secret=…`
-5. Start:
-   - `pnpm dev` (Vite + demo-server)
+Official guide: [help.surfy.pro — Surfy SDK](https://help.surfy.pro/entities/sdk/).
 
-The UI loads buildings / floors live from the API and shows a picker.
+## Setup
 
-## Deploy on Netlify (alpha demo)
+1. Sync the SDK bundle (from the Surfy monorepo):
+   ```bash
+   pnpm build:sdk      # in the surfy-sdk worktree
+   pnpm sync:sdk       # in this repo
+   ```
+2. Install dependencies: `pnpm install`
+3. Configure env files from the provided examples:
+   - `apps/react-web/.env` from `apps/react-web/.env.example`
+   - `apps/demo-server/.env` from `apps/demo-server/.env.example` with your `SURFY_CONNECTION_STRING`
+4. Start: `pnpm dev`
 
-Yes — one React web app can expose all three demo tabs, talk to **alpha**, and stay reasonably safe if the API secret stays in **Netlify Functions** (not in `VITE_*`).
+## Deployment
 
-Full guide: **[docs/NETLIFY.md](docs/NETLIFY.md)**.
+- **Netlify** — see [docs/NETLIFY.md](docs/NETLIFY.md)
+- **Docker** (local Netlify-parity) — see [docs/NETLIFY.md#docker](docs/NETLIFY.md#local-netlify-parity-docker)
 
-Summary:
-
-1. Connect this repo to Netlify (`netlify.toml` is ready).
-2. Set optional build var: `VITE_DEMO_GATE_KEY` (browser always uses site origin for `/api/*`).
-3. Set function secret: `SURFY_CONNECTION_STRING=host=…;client_id=…;client_secret=…`.
-4. Strongly recommended: `DEMO_GATE_KEY` + `VITE_DEMO_GATE_KEY`, and/or Netlify password protection.
-
-### Local Netlify-parity (Docker)
-
-Reproduce the remote build (Vite + function esbuild) and serve with injected env:
+## Quality & CI
 
 ```bash
-cp .env.docker.example .env.docker
-# edit SURFY_CONNECTION_STRING
-
-pnpm build:netlify          # same steps as Netlify build command
-docker compose up --build   # http://localhost:8080
+pnpm quality          # lint + build + typecheck
+pnpm quality:full     # + E2E Playwright (credentials required)
+pnpm scan:secrets     # GitGuardian secret scan
 ```
 
-`pnpm build:functions` alone verifies that `@surfy/surfy-demo-auth` resolves for Netlify’s esbuild bundler.
+GitHub Actions runs `quality` on every push and `test:e2e` on every PR/push to `main` (requires secret `SURFY_CONNECTION_STRING`). See [docs/CI.md](docs/CI.md).
 
-## Documentation (intégrateurs)
+## SDK versioning & E2E coverage
 
-Guide développeur officiel : [surfy-help — Surfy SDK](https://help.surfy.pro/entities/sdk/).
+- **Versions**: demo app (`DEMO_APP_VERSION`) vs synced bundle (`packages/surfy-sdk/SDK_VERSION`) — see [docs/VERSIONING.md](docs/VERSIONING.md).
+- **100% E2E coverage**: every public SDK capability is listed in [`apps/react-web/e2e/sdkFeatureManifest.ts`](apps/react-web/e2e/sdkFeatureManifest.ts) and covered by a Playwright test. The `coverage-gate.spec.ts` fails the CI if any entry is missing a test.
 
-## Qualité de code (équipe Surfy)
+## Security
 
-Conventions demos (types SDK, couches, taille des fichiers, checklist PR) : **[docs/CODE_QUALITY.md](docs/CODE_QUALITY.md)**.
-
-Avant une PR demos :
-
-```bash
-pnpm quality                # lint + build react-web + typecheck demo-server
-pnpm scan:secrets
-```
-
-Voir aussi le script `quality` dans `package.json`.
-
-## Versionnement & couverture SDK
-
-- **Versions** : app démo (`DEMO_APP_VERSION`) vs bundle syncé (`packages/surfy-sdk/SDK_VERSION`) — voir **[docs/VERSIONING.md](docs/VERSIONING.md)**.
-- **E2E 100 %** : manifeste [`apps/react-web/e2e/sdkFeatureManifest.ts`](apps/react-web/e2e/sdkFeatureManifest.ts) + `pnpm test:e2e` (gate `coverage-gate.spec.ts`).
-
-```bash
-pnpm quality:full   # lint + build + tous les E2E (credentials requis)
-```
-
-**CI GitHub Actions** (push / PR `main`) : voir **[docs/CI.md](docs/CI.md)** — secret `SURFY_CONNECTION_STRING` requis pour le job E2E.
-
-## Security scanning (public-ready)
-
-GitGuardian CLI (`ggshield`) is **required** — no fallback.
-
-```bash
-brew install ggshield
-ggshield auth login
-./scripts/setup-git-hooks.sh
-```
-
-See also [SECURITY.md](SECURITY.md).
+See [SECURITY.md](SECURITY.md). In short: `SURFY_CONNECTION_STRING` lives only in `apps/demo-server/.env` or Netlify Functions env — never in `VITE_*` or committed to the repo.
