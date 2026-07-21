@@ -1,6 +1,8 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import {
   assertDemoGate,
+  createDemoProxyRateLimiter,
+  createSurfyDemoSessionToken,
   demoAuthErrorBody,
   DemoGateError,
   fetchSurfyAccessToken,
@@ -14,6 +16,7 @@ import {
   SURFY_DEMO_PROXY_PATH_PREFIX,
   SURFY_DEMO_SESSION_COOKIE,
   SURFY_DEMO_API_ORIGIN_HEADER,
+  verifySurfyDemoSessionToken,
 } from '@surfy/surfy-demo-auth';
 
 type SessionResponse = {
@@ -29,6 +32,9 @@ type ErrorResponse = {
 const app = express();
 const port = Number(process.env.PORT ?? 8787);
 const cookieSecure = process.env.COOKIE_SECURE === '1' || process.env.NODE_ENV === 'production';
+
+/** Per-IP + global rate limit so the demo can't flood upstream Surfy. */
+const proxyRateLimiter = createDemoProxyRateLimiter();
 
 /** Lazy so a bad SURFY_CONNECTION_STRING returns JSON 500 instead of crashing at boot. */
 let authEnvCache: SurfyDemoAuthEnv | undefined;
@@ -67,10 +73,11 @@ function readCookie(req: Request, name: string): string | undefined {
   return undefined;
 }
 
-function setSessionCookie(res: Response): void {
+function setSessionCookie(res: Response, authEnv: SurfyDemoAuthEnv): void {
   const maxAge = 60 * 60 * 8; // 8h
+  const token = createSurfyDemoSessionToken(authEnv);
   const parts = [
-    `${SURFY_DEMO_SESSION_COOKIE}=1`,
+    `${SURFY_DEMO_SESSION_COOKIE}=${token}`,
     'Path=/',
     'HttpOnly',
     'SameSite=Lax',
@@ -81,8 +88,44 @@ function setSessionCookie(res: Response): void {
 }
 
 function requireSession(req: Request, res: Response, next: NextFunction): void {
-  if (!readCookie(req, SURFY_DEMO_SESSION_COOKIE)) {
+  let authEnv: SurfyDemoAuthEnv;
+  try {
+    authEnv = getAuthEnv();
+  } catch (error) {
+    sendAuthError(res, error, 'Session check failed');
+    return;
+  }
+  const token = readCookie(req, SURFY_DEMO_SESSION_COOKIE);
+  if (!verifySurfyDemoSessionToken(token, authEnv)) {
     res.status(401).json({ error: 'Demo session required — call GET /api/session first' });
+    return;
+  }
+  next();
+}
+
+function clientKey(req: Request): string {
+  const forwarded = req.header('x-forwarded-for');
+  if (forwarded) {
+    const first = forwarded.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  return req.ip ?? req.socket.remoteAddress ?? 'unknown';
+}
+
+function rateLimit(req: Request, res: Response, next: NextFunction): void {
+  if (!proxyRateLimiter) {
+    next();
+    return;
+  }
+  const decision = proxyRateLimiter.check(clientKey(req));
+  if (!decision.allowed) {
+    res.setHeader('Retry-After', String(decision.retryAfterSec));
+    res.status(429).json({
+      error: 'Rate limit exceeded — slow down',
+      code: 'DEMO_RATE_LIMIT',
+      scope: decision.scope,
+      retryAfterSec: decision.retryAfterSec,
+    });
     return;
   }
   next();
@@ -106,7 +149,7 @@ app.get('/api/session', async (req: Request, res: Response<SessionResponse | Err
     const authEnv = getAuthEnv();
     assertDemoGate(readDemoGateKey(req), authEnv.demoGateKey);
     await resolveSurfyBearer(authEnv); // warm cache / fail fast
-    setSessionCookie(res);
+    setSessionCookie(res, authEnv);
     res.json({ tenant: authEnv.clientId, authMode: 'api' });
   } catch (error) {
     sendAuthError(res, error, 'Session failed');
@@ -119,7 +162,7 @@ app.get('/api/surfy-token', async (req: Request, res: Response) => {
     const authEnv = getAuthEnv();
     assertDemoGate(readDemoGateKey(req), authEnv.demoGateKey);
     await resolveSurfyBearer(authEnv);
-    setSessionCookie(res);
+    setSessionCookie(res, authEnv);
     res.json({
       tenant: authEnv.clientId,
       authMode: 'api',
@@ -139,7 +182,7 @@ app.get('/api/health', (_req: Request, res: Response<{ status: 'ok' }>) => {
  * Browser: `/proxy/api/v1/...` (+ optional `?surfyApiOrigin=` / `X-Surfy-API-Origin`).
  * Server injects Bearer from SURFY_CONNECTION_STRING and forwards method/query/body.
  */
-app.use(SURFY_DEMO_PROXY_PATH_PREFIX, requireSession, async (req: Request, res: Response) => {
+app.use(SURFY_DEMO_PROXY_PATH_PREFIX, requireSession, rateLimit, async (req: Request, res: Response) => {
   try {
     const authEnv = getAuthEnv();
     const upstreamPath = resolveSurfyProxyUpstreamPath(

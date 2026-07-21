@@ -36,6 +36,20 @@ export {
   type DemoAuthErrorCode,
 } from './errors.js';
 export {
+  createDemoProxyRateLimiter,
+  TokenBucketRateLimiter,
+  type DemoProxyRateLimiter,
+  type DemoRateLimitDecision,
+  type RateLimitResult,
+  type TokenBucketOptions,
+} from './rateLimiter.js';
+export {
+  createSurfyDemoSessionToken,
+  verifySurfyDemoSessionToken,
+  SURFY_DEMO_SESSION_TTL_MS,
+  type SessionTokenOptions,
+} from './sessionToken.js';
+export {
   clearCachedSurfyAccessToken,
   fetchSurfyAccessToken,
   normalizeBaseUrl,

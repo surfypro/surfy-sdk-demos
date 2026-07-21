@@ -1,5 +1,6 @@
 import type { Handler, HandlerEvent } from '@netlify/functions';
 import {
+  createDemoProxyRateLimiter,
   demoAuthErrorBody,
   forwardSurfyProxyRequest,
   httpStatusFromDemoAuthError,
@@ -8,7 +9,47 @@ import {
   SurfyConfigError,
   SURFY_DEMO_SESSION_COOKIE,
   SURFY_DEMO_API_ORIGIN_HEADER,
+  verifySurfyDemoSessionToken,
 } from '@surfy/surfy-demo-auth';
+
+/**
+ * Per-IP + global rate limit. Best-effort on serverless: buckets live per warm
+ * instance, so this caps a single hot instance rather than the whole site. Pair
+ * with a Surfy-side quota / read-only API user for a durable guarantee.
+ */
+const proxyRateLimiter = createDemoProxyRateLimiter();
+
+function clientKey(event: HandlerEvent): string {
+  const direct =
+    readHeader(event, 'x-nf-client-connection-ip') ?? readHeader(event, 'cf-connecting-ip');
+  if (direct) return direct;
+  const forwarded = readHeader(event, 'x-forwarded-for');
+  const first = forwarded?.split(',')[0]?.trim();
+  return first || 'unknown';
+}
+
+type ProxyResponse = Awaited<ReturnType<Handler>>;
+
+/** 429 response when the caller is over the rate limit, else `null`. */
+function rateLimitResponse(event: HandlerEvent): ProxyResponse {
+  if (!proxyRateLimiter) return null;
+  const decision = proxyRateLimiter.check(clientKey(event));
+  if (decision.allowed) return null;
+  return {
+    statusCode: 429,
+    headers: {
+      'Content-Type': 'application/json',
+      'Retry-After': String(decision.retryAfterSec),
+      ...corsHeaders(),
+    },
+    body: JSON.stringify({
+      error: 'Rate limit exceeded — slow down',
+      code: 'DEMO_RATE_LIMIT',
+      scope: decision.scope,
+      retryAfterSec: decision.retryAfterSec,
+    }),
+  };
+}
 
 function readCookie(event: HandlerEvent, name: string): string | undefined {
   const raw = event.headers.cookie ?? event.headers.Cookie;
@@ -35,13 +76,17 @@ export const handler: Handler = async (event) => {
 
   try {
     const authEnv = loadSurfyDemoAuthEnv();
-    if (!readCookie(event, SURFY_DEMO_SESSION_COOKIE)) {
+    const sessionToken = readCookie(event, SURFY_DEMO_SESSION_COOKIE);
+    if (!verifySurfyDemoSessionToken(sessionToken, authEnv)) {
       return {
         statusCode: 401,
         headers: { 'Content-Type': 'application/json', ...corsHeaders() },
         body: JSON.stringify({ error: 'Demo session required — call GET /api/session first' }),
       };
     }
+
+    const limited = rateLimitResponse(event);
+    if (limited) return limited;
 
     const upstreamPath = resolveUpstreamPath(event);
     const extraHeaders: Record<string, string> = {};

@@ -1,6 +1,7 @@
 import type { Handler, HandlerEvent } from '@netlify/functions';
 import {
   assertDemoGate,
+  createSurfyDemoSessionToken,
   demoAuthErrorBody,
   DemoGateError,
   fetchSurfyAccessToken,
@@ -8,6 +9,7 @@ import {
   loadSurfyDemoAuthEnv,
   SURFY_DEMO_PROXY_BEARER,
   SURFY_DEMO_SESSION_COOKIE,
+  type SurfyDemoAuthEnv,
 } from '@surfy/surfy-demo-auth';
 
 function readDemoGateKey(event: HandlerEvent): string | undefined {
@@ -17,9 +19,10 @@ function readDemoGateKey(event: HandlerEvent): string | undefined {
   return raw || undefined;
 }
 
-function sessionCookieHeader(secure: boolean): string {
+function sessionCookieHeader(authEnv: SurfyDemoAuthEnv, secure: boolean): string {
+  const token = createSurfyDemoSessionToken(authEnv);
   const parts = [
-    `${SURFY_DEMO_SESSION_COOKIE}=1`,
+    `${SURFY_DEMO_SESSION_COOKIE}=${token}`,
     'Path=/',
     'HttpOnly',
     'SameSite=Lax',
@@ -54,7 +57,7 @@ export const handler: Handler = async (event) => {
       statusCode: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Set-Cookie': sessionCookieHeader(secure),
+        'Set-Cookie': sessionCookieHeader(authEnv, secure),
         ...corsHeaders(),
       },
       body: JSON.stringify({
