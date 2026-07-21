@@ -12,6 +12,7 @@ export function FillParentToggle({ checked, onChange }: FillParentToggleProps) {
       <input
         type="checkbox"
         checked={checked}
+        data-testid="demo-fill-parent"
         onChange={(event) => onChange(event.target.checked)}
       />
       {t('layout.fillParent')}

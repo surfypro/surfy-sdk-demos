@@ -13,7 +13,9 @@ import {
 } from './demoRoutes';
 import { DemoThemeProvider } from './DemoThemeContext';
 import { DemoThemeSwitcher } from './DemoThemeSwitcher';
+import { DemoSdkMeta } from './DemoSdkMeta';
 import { DemoWorkbench } from './DemoWorkbench';
+import { DEMO_APP_VERSION } from './demoVersion';
 import { DemoI18nProvider, useDemoI18n } from './i18n/DemoI18nProvider';
 import { DemoLocaleSwitcher } from './i18n/DemoLocaleSwitcher';
 import { NativeWebViewSimulator } from './NativeWebViewSimulator';
@@ -73,6 +75,10 @@ function DemoAppShell() {
         </div>
       </header>
       <p className="page__intro page__intro--compact">{t('app.routesHint')}</p>
+      <p className="page__version" data-testid="demo-version-line">
+        Demo v{DEMO_APP_VERSION}
+      </p>
+      <DemoSdkMeta />
 
       <nav className="host-tabs" role="tablist" aria-label={t('nav.auth')}>
         {DEMO_AUTH_MODES.map((mode) => (

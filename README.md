@@ -69,6 +69,15 @@ pnpm scan:secrets
 
 Voir aussi le script `quality` dans `package.json`.
 
+## Versionnement & couverture SDK
+
+- **Versions** : app démo (`DEMO_APP_VERSION`) vs bundle syncé (`packages/surfy-sdk/SDK_VERSION`) — voir **[docs/VERSIONING.md](docs/VERSIONING.md)**.
+- **E2E 100 %** : manifeste [`apps/react-web/e2e/sdkFeatureManifest.ts`](apps/react-web/e2e/sdkFeatureManifest.ts) + `pnpm test:e2e` (gate `coverage-gate.spec.ts`).
+
+```bash
+pnpm quality:full   # lint + build + tous les E2E (credentials requis)
+```
+
 ## Security scanning (public-ready)
 
 GitGuardian CLI (`ggshield`) is **required** — no fallback.

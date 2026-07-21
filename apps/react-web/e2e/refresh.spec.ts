@@ -3,6 +3,7 @@ import { hasSurfySdkCredentials } from './credentials';
 import {
   attachBrowserErrorCollector,
   BUILDING_3D_DEMO_URL,
+  DATA_API_DEMO_URL,
   DEFAULT_DEMO_URL,
 } from './helpers';
 
@@ -35,7 +36,11 @@ test.describe('SPA deep-link refresh', () => {
       await expect(page.getByRole('heading', { name: 'Surfy SDK Demo' })).toBeVisible();
 
       if (path.startsWith('/api/react-web/') && hasSdkCredentials) {
-        await expect(page.getByTestId('demo-scope-picker')).toBeVisible({ timeout: 60_000 });
+        if (path === DATA_API_DEMO_URL) {
+          await expect(page.getByTestId('demo-section-data-api')).toBeVisible({ timeout: 60_000 });
+        } else {
+          await expect(page.getByTestId('demo-scope-picker')).toBeVisible({ timeout: 60_000 });
+        }
       }
 
       if (path.includes('/oauth/')) {

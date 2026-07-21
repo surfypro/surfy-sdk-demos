@@ -113,10 +113,13 @@ Chaque contrôle démo qui appelle une API SDK doit avoir :
 ## Checklist PR (demos)
 
 - [ ] `pnpm quality` vert (lint + build + typecheck serveur)
+- [ ] **`pnpm quality:full`** si changement SDK / layout / E2E (inclut `test:e2e` + gate couverture)
+- [ ] Manifeste [`sdkFeatureManifest.ts`](../apps/react-web/e2e/sdkFeatureManifest.ts) à jour pour toute nouvelle API SDK
 - [ ] Aucun type SDK recopié ; imports depuis `@surfy/surfy-sdk`
 - [ ] Fichiers touchés restent sous les limites soft (ou split justifié)
 - [ ] Snippets + surfy-help à jour si nouvelle API démontrée
 - [ ] `pnpm sync:sdk` après rebuild SDK si le bundle a changé
+- [ ] Bump `DEMO_APP_VERSION` + [CHANGELOG.md](../CHANGELOG.md) si release démo ([VERSIONING.md](VERSIONING.md))
 - [ ] `pnpm scan:secrets` / hooks GitGuardian OK
 
 ## Anti-patterns déjà rencontrés

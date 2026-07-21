@@ -22,4 +22,7 @@ cp "${SOURCE_DIR}/index.d.ts" "${TARGET_DIR}/index.d.ts"
 cp "${SOURCE_DIR}/client.js" "${TARGET_DIR}/client.js"
 cp "${SOURCE_DIR}/client.d.ts" "${TARGET_DIR}/client.d.ts"
 
-echo "Synced local SDK bundle to ${TARGET_DIR} (index + client)"
+SDK_VERSION=$(node -e "const fs=require('fs');const s=fs.readFileSync('${SOURCE_DIR}/index.js','utf8');const m=s.match(/var SURFY_SDK_VERSION = \"([^\"]+)\"/);if(!m)process.exit(1);process.stdout.write(m[1]);")
+echo "${SDK_VERSION}" > "${TARGET_DIR}/SDK_VERSION"
+
+echo "Synced local SDK bundle to ${TARGET_DIR} (index + client, SDK ${SDK_VERSION})"

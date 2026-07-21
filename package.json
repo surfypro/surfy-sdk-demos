@@ -1,7 +1,7 @@
 {
   "name": "surfy-sdk-demos",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Public demo apps for Surfy SDK (React + React Native targets).",
   "packageManager": "pnpm@11.10.0",
   "scripts": {
@@ -19,7 +19,8 @@
     "sync:sdk": "bash scripts/sync-local-sdk.sh",
     "install:all": "pnpm install -r",
     "scan:secrets": "bash scripts/scan-secrets.sh",
-    "quality": "pnpm --filter react-web lint && pnpm --filter react-web build && pnpm --filter demo-server typecheck"
+    "quality": "pnpm --filter react-web lint && pnpm --filter react-web build && pnpm --filter demo-server typecheck",
+    "quality:full": "pnpm quality && pnpm test:e2e"
   },
   "dependencies": {
     "@surfy/surfy-demo-auth": "workspace:*"

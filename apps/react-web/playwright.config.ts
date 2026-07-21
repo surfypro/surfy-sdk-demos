@@ -35,6 +35,15 @@ const demoServerPort = Number(process.env.PLAYWRIGHT_DEMO_SERVER_PORT ?? 8788);
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${reactPort}`;
 const demoServerURL = process.env.PLAYWRIGHT_DEMO_SERVER_URL ?? `http://localhost:${demoServerPort}`;
 
+/** E2E runs many parallel layout mounts — disable proxy rate limit unless explicitly configured. */
+const demoServerE2eEnv = {
+  ...process.env,
+  ...mergedEnv,
+  PORT: String(demoServerPort),
+  DEMO_RATE_LIMIT_DISABLED:
+    process.env.DEMO_RATE_LIMIT_DISABLED ?? mergedEnv.DEMO_RATE_LIMIT_DISABLED ?? '1',
+};
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -64,11 +73,7 @@ export default defineConfig({
           url: `${demoServerURL}/api/health`,
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,
-          env: {
-            ...process.env,
-            ...mergedEnv,
-            PORT: String(demoServerPort),
-          },
+          env: demoServerE2eEnv,
         },
         {
           command: 'pnpm dev',

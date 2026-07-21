@@ -16,14 +16,16 @@ test.describe('React demo shell', () => {
     await expect(page.getByRole('heading', { name: 'Surfy SDK Demo' })).toBeVisible();
     await expect(page.getByTestId('auth-mode-api')).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Étage 2D' })).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Étage 3D' })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Bâtiment 3D' })).toBeVisible();
+    await expect(page.getByTestId('demo-tab-floor-3d')).toHaveCount(0);
 
     if (hasSdkCredentials) {
       await expect(page.getByTestId('demo-scope-picker')).toBeVisible({ timeout: 60_000 });
       await expect(page.getByTestId('demo-section-floor-2d')).toBeVisible();
       await expect(page.getByText('Last event:')).toBeVisible();
       await expect(page.getByRole('button', { name: 'Clear colors' })).toBeVisible();
+      await expect(page.getByTestId('demo-fit-to-view')).toBeVisible();
+      await expect(page.getByTestId('demo-zoom-on-room')).toBeVisible();
       await expect(page.locator('surfy-floor-layout-2d')).toBeVisible();
 
       await expect
