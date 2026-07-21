@@ -114,6 +114,7 @@ Chaque contrôle démo qui appelle une API SDK doit avoir :
 
 - [ ] `pnpm quality` vert (lint + build + typecheck serveur)
 - [ ] **`pnpm quality:full`** si changement SDK / layout / E2E (inclut `test:e2e` + gate couverture)
+- [ ] CI GitHub verte sur la PR ([docs/CI.md](CI.md))
 - [ ] Manifeste [`sdkFeatureManifest.ts`](../apps/react-web/e2e/sdkFeatureManifest.ts) à jour pour toute nouvelle API SDK
 - [ ] Aucun type SDK recopié ; imports depuis `@surfy/surfy-sdk`
 - [ ] Fichiers touchés restent sous les limites soft (ou split justifié)

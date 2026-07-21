@@ -1,5 +1,7 @@
 # Surfy SDK Demos
 
+[![CI](https://github.com/surfypro/surfy-sdk-demos/actions/workflows/ci.yml/badge.svg)](https://github.com/surfypro/surfy-sdk-demos/actions/workflows/ci.yml)
+
 Monorepo for SDK integration demos:
 
 - `apps/react-web` — **active** (React web + simulateur React Native WebView sur le même site)
@@ -77,6 +79,8 @@ Voir aussi le script `quality` dans `package.json`.
 ```bash
 pnpm quality:full   # lint + build + tous les E2E (credentials requis)
 ```
+
+**CI GitHub Actions** (push / PR `main`) : voir **[docs/CI.md](docs/CI.md)** — secret `SURFY_CONNECTION_STRING` requis pour le job E2E.
 
 ## Security scanning (public-ready)
 
