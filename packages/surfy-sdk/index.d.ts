@@ -22,7 +22,17 @@ export interface IEmbedLayoutViewData {
 	readonly rooms: readonly IEmbedRoom[];
 	readonly roomPoints: readonly IEmbedRoomPoint[];
 }
-export type SurfySdkErrorCode = "AUTH_EXPIRED" | "AUTH_FORBIDDEN" | "TENANT_MISMATCH" | "LAYOUT_NOT_FOUND" | "NETWORK" | "SDK_CONFIG";
+/** Runtime list mirroring {@link SurfySdkErrorCode} — do not invent codes without métier amend. */
+export declare const SURFY_SDK_ERROR_CODES: readonly [
+	"AUTH_EXPIRED",
+	"AUTH_FORBIDDEN",
+	"TENANT_MISMATCH",
+	"LAYOUT_NOT_FOUND",
+	"NETWORK",
+	"SDK_CONFIG",
+	"PIN_GPS_UNAVAILABLE"
+];
+export type SurfySdkErrorCode = (typeof SURFY_SDK_ERROR_CODES)[number];
 export interface SurfySdkErrorDetail {
 	readonly code: SurfySdkErrorCode;
 	readonly message: string;
@@ -86,7 +96,13 @@ export interface SurfyLayoutMountBaseOptions {
 	readonly locale?: string;
 	/** Default `true`. */
 	readonly fillParent?: boolean;
+	/** Machine JWT provider — only auth path accepted in the browser/host. */
 	readonly getAccessToken: () => Promise<string>;
+	/**
+	 * Forbidden — never pass a client secret to the SDK.
+	 * Use a backend to mint JWTs and expose {@link SurfyLayoutMountBaseOptions.getAccessToken}.
+	 */
+	readonly clientSecret?: never;
 	readonly theme?: SurfyThemeOptions | null;
 	readonly onRoomHover?: (detail: SurfyRoomHoverDetail) => void;
 	readonly onRoomSelected?: (detail: SurfyRoomSelectedDetail) => void;
@@ -128,8 +144,9 @@ export interface SurfyLayoutElement extends HTMLElement {
 	/** Re-center the camera / SVG transform on the current scene bounds. */
 	fitToView(): void;
 	/**
-	 * Frame a room or workplace so roughly `diameterMeters` of plan is visible around it.
-	 * Exactly one of `roomId` / `workplaceId` is required.
+	 * Frame a shape so roughly `diameterMeters` of plan is visible around it.
+	 * Exactly one of `roomId` / `workplaceId` / `itemId` / `dimensionId` is required.
+	 * Multiple target ids → throws {@link SurfySdkErrorCode} `SDK_CONFIG`.
 	 */
 	zoomOn(options: SurfyZoomOnOptions): void;
 	/**
@@ -137,11 +154,47 @@ export interface SurfyLayoutElement extends HTMLElement {
 	 * Partial merge — only supplied keys change.
 	 */
 	updateRoom(roomId: number, options: SurfyRoomUpdateOptions): void;
+	/** Add a layout or GPS pin; returns stable id (host `id` or generated). */
+	addPin(spec: SurfyPinSpec): SurfyPinId;
+	removePin(id: SurfyPinId): void;
+	clearPins(): void;
+	/** Host-facing specs as provided (layout and/or GPS), not only normalized xy. */
+	listPins(): readonly SurfyPinSpec[];
+	/** Frame the view around an existing pin. */
+	zoomToPin(options: SurfyZoomToPinOptions): void;
+}
+declare const surfyPinIdBrand: unique symbol;
+export type SurfyPinId = string & {
+	readonly [surfyPinIdBrand]?: never;
+};
+/** Layout coords — floor-2d may omit `floorId` (defaults to mounted floor). */
+export type SurfyPinLayout = {
+	readonly x: number;
+	readonly y: number;
+	readonly floorId?: number;
+};
+/** GPS coords — `floorId` always required (no altitude). */
+export type SurfyPinGps = {
+	readonly lat: number;
+	readonly lng: number;
+	readonly floorId: number;
+};
+export type SurfyPinSpec = (SurfyPinLayout | SurfyPinGps) & {
+	readonly id?: SurfyPinId;
+	readonly label?: string;
+};
+/** Options for {@link SurfyLayoutElement.zoomToPin}. */
+export interface SurfyZoomToPinOptions {
+	readonly pinId: SurfyPinId;
+	readonly diameterMeters: number;
+	readonly animate?: boolean;
 }
 /** Options for {@link SurfyLayoutElement.zoomOn} / layout handle `zoomOn`. */
 export interface SurfyZoomOnOptions {
 	readonly roomId?: number;
 	readonly workplaceId?: number;
+	readonly itemId?: number;
+	readonly dimensionId?: number;
 	/** Visible disk diameter in meters around the target. */
 	readonly diameterMeters: number;
 	/** Animate the camera / SVG transform (default `true`). */
@@ -200,6 +253,11 @@ export interface SurfyLayout {
 	fitToView(): void;
 	zoomOn(options: SurfyZoomOnOptions): void;
 	updateRoom(roomId: number, options: SurfyRoomUpdateOptions): void;
+	addPin(spec: SurfyPinSpec): SurfyPinId;
+	removePin(id: SurfyPinId): void;
+	clearPins(): void;
+	listPins(): readonly SurfyPinSpec[];
+	zoomToPin(options: SurfyZoomToPinOptions): void;
 	setFillParent(fill: boolean): void;
 	/** Update `floor-id` or `building-id` according to {@link SurfyLayout.kind}. */
 	setEntityId(entityId: number): void;
@@ -226,54 +284,6 @@ export interface IFetchFloorLayoutParams {
 	readonly signal?: AbortSignal;
 }
 export declare function fetchFloorLayoutData(params: IFetchFloorLayoutParams): Promise<IEmbedLayoutViewData>;
-/** Minimal QueryNode shape for Surfy `POST /api/v1/data/entities` (isomorphic). */
-export type SurfyWhereOperator = "like" | "eq" | "in" | "notIn" | "notEq" | "is";
-export type SurfyFilterValue = string | number | boolean | null | readonly (string | number)[];
-export interface SurfyQueryFilter<Column extends string = string> {
-	readonly operator: SurfyWhereOperator;
-	readonly column: Column;
-	readonly value: SurfyFilterValue;
-}
-export interface SurfyQueryNodePagination {
-	readonly limit: number;
-	readonly offset?: number;
-}
-export type SurfyObjectTypeName = "building" | "floor" | "room" | (string & {});
-export type SurfyQueryTreeNode = string | SurfyQueryNode;
-export interface SurfyQueryNode<Name extends SurfyObjectTypeName = SurfyObjectTypeName> {
-	readonly name: Name;
-	readonly _?: readonly SurfyQueryTreeNode[];
-	readonly filters?: readonly SurfyQueryFilter[];
-	readonly pagination?: SurfyQueryNodePagination;
-	readonly order?: string;
-	readonly required?: boolean;
-	readonly totalCount?: boolean;
-}
-export declare function createFilter<Column extends string>(operator: SurfyWhereOperator, column: Column, value: SurfyFilterValue): SurfyQueryFilter<Column>;
-export type SurfyRequestAuth = {
-	readonly baseUrl: string;
-	readonly tenant: string;
-	readonly getAccessToken: () => Promise<string>;
-	readonly locale?: string;
-};
-export declare const SURFY_ENTITIES_ROUTE = "/api/v1/data/entities";
-export type SurfyClientOptions = SurfyRequestAuth;
-/**
- * Isomorphic Surfy data client — inject `baseUrl` (origin) at creation.
- * Primary API: {@link SurfyClient.fetchEntities} with your own QueryNode
- * (business queries stay in the app, not in the SDK).
- */
-export declare class SurfyClient {
-	private readonly auth;
-	private constructor();
-	static create(options: SurfyClientOptions): SurfyClient;
-	get baseUrl(): string;
-	get tenant(): string;
-	/**
-	 * POST `/api/v1/data/entities` — pass any QueryNode you build in app code.
-	 */
-	fetchEntities<T>(queryNode: SurfyQueryNode, signal?: AbortSignal): Promise<T[]>;
-}
 export interface IPaginationList<T> {
 	totalCount?: number;
 	entities?: T[];
@@ -348,6 +358,12 @@ export interface IJupAddress {
 }
 export interface IJupLegendConfiguration {
 	properties: string[];
+}
+/** Optional vertical label strip on the right side of item-type icons (extinguisher variants, etc.). */
+export interface IItemTypeIconBadge {
+	text: string;
+	backgroundColor: string;
+	textColor: string;
 }
 export interface IGridNodeLink {
 	difficulty: number;
@@ -608,6 +624,31 @@ export interface IItemTypeFamily extends IItemTypeFamilyRaw {
 	company?: ICompany;
 	itemTypes?: IPaginationList<IItemType>;
 }
+export interface IItemTypeVisualEdgeRaw extends IEntity {
+	id: number;
+	x1: number;
+	y1: number;
+	x2: number;
+	y2: number;
+	sortIndex: number;
+	createdAt?: string;
+	updatedAt?: string;
+	externalId?: string;
+	itemTypeId: number;
+	itemTypePointStartId?: number | null;
+	itemTypePointEndId?: number | null;
+	userCompanyCreatedById?: number | null;
+	userCompanyUpdatedById?: number | null;
+	companyId?: number | null;
+}
+export interface IItemTypeVisualEdge extends IItemTypeVisualEdgeRaw {
+	itemType?: IItemType;
+	itemTypePointStart?: IItemTypePoint;
+	itemTypePointEnd?: IItemTypePoint;
+	userCompanyCreatedBy?: IUserCompany;
+	userCompanyUpdatedBy?: IUserCompany;
+	company?: ICompany;
+}
 export interface IItemTypePointRaw extends IEntity {
 	id: number;
 	x: number;
@@ -626,6 +667,8 @@ export interface IItemTypePoint extends IItemTypePointRaw {
 	userCompanyCreatedBy?: IUserCompany;
 	userCompanyUpdatedBy?: IUserCompany;
 	company?: ICompany;
+	itemTypeVisualEdgeStarts?: IPaginationList<IItemTypeVisualEdge>;
+	itemTypeVisualEdgeEnds?: IPaginationList<IItemTypeVisualEdge>;
 }
 export interface IManufacturerRaw extends IEntity {
 	id: number;
@@ -816,6 +859,8 @@ export interface IPersonToRoomBookingRaw extends IEntity {
 	id: number;
 	startDatetime: string;
 	endDatetime: string;
+	roomHasBeenConfirmedAt?: string;
+	emailConfirmationWarningNotificationSentAt?: string;
 	createdAt?: string;
 	updatedAt?: string;
 	externalId?: string;
@@ -951,6 +996,7 @@ export interface IWorkplaceRaw extends IEntity {
 	workplaceAffectationsCount?: number;
 	comment?: string;
 	isBookable?: boolean;
+	isReleasable?: boolean;
 	createdAt?: string;
 	updatedAt?: string;
 	externalId?: string;
@@ -1038,6 +1084,7 @@ export interface IItemTypeRaw extends IEntity {
 	iconShape?: IconShapeType;
 	iconBackgroundColor?: string;
 	iconBorderColor?: string;
+	iconBadge?: IItemTypeIconBadge;
 	isAffectable?: boolean;
 	excludeFromPathfinding?: boolean;
 	createdAt?: string;
@@ -1058,6 +1105,7 @@ export interface IItemType extends IItemTypeRaw {
 	userCompanyUpdatedBy?: IUserCompany;
 	company?: ICompany;
 	itemTypePoints?: IPaginationList<IItemTypePoint>;
+	itemTypeVisualEdges?: IPaginationList<IItemTypeVisualEdge>;
 	workplaceTypeItemTypes?: IPaginationList<IWorkplaceTypeItemType>;
 	items?: IPaginationList<IItem>;
 	personCompanyToItemTypes?: IPaginationList<IPersonCompanyToItemType>;
@@ -1311,7 +1359,7 @@ export interface IRoomTypeGroupFloor extends IRoomTypeGroupFloorRaw {
 export interface IRoomTypeGroupRaw extends IEntity {
 	id: number;
 	name: string;
-	code?: string;
+	code: string;
 	color?: string;
 	exclude?: boolean;
 	createdAt?: string;
@@ -2890,6 +2938,8 @@ export interface IUserCompany extends IUserCompanyRaw {
 	roomPointSegmentUpdatedBies?: IPaginationList<IRoomPointSegment>;
 	itemTypePointCreatedBies?: IPaginationList<IItemTypePoint>;
 	itemTypePointUpdatedBies?: IPaginationList<IItemTypePoint>;
+	itemTypeVisualEdgeCreatedBies?: IPaginationList<IItemTypeVisualEdge>;
+	itemTypeVisualEdgeUpdatedBies?: IPaginationList<IItemTypeVisualEdge>;
 	dimensionTypeCreatedBies?: IPaginationList<IDimensionType>;
 	dimensionTypeUpdatedBies?: IPaginationList<IDimensionType>;
 	dimensionCreatedBies?: IPaginationList<IDimension>;
@@ -3048,6 +3098,7 @@ export interface ICompanyRaw extends IEntity {
 	planningNumberOfDays?: number;
 	enableCrowdedDimensionForBooking?: boolean;
 	enableBuildingBookingWhenAllDimensionsAreCrowded?: boolean;
+	enableStaticDeskReleaseOnAbsence?: boolean;
 	workplaceBookingConfirmationRange?: string;
 	workplaceBookingAgendaSyncEnabled?: boolean;
 	trackUserActivity?: boolean;
@@ -3158,12 +3209,81 @@ export interface IBuilding extends IBuildingRaw {
 	dimensionTypeToBuildings?: IPaginationList<IDimensionTypeToBuilding>;
 	contentRoleToBuildings?: IPaginationList<IContentRoleToBuilding>;
 }
+/** Minimal QueryNode shape for Surfy `POST /api/v1/data/entities` (isomorphic). */
+export type SurfyWhereOperator = "like" | "eq" | "in" | "notIn" | "notEq" | "is";
+export type SurfyFilterValue = string | number | boolean | null | readonly (string | number)[];
+export interface SurfyQueryFilter<Column extends string = string> {
+	readonly operator: SurfyWhereOperator;
+	readonly column: Column;
+	readonly value: SurfyFilterValue;
+}
+export interface SurfyQueryNodePagination {
+	readonly limit: number;
+	readonly offset?: number;
+}
+export type SurfyObjectTypeName = "building" | "floor" | "room" | (string & {});
+export type SurfyQueryTreeNode = string | SurfyQueryNode;
+export interface SurfyQueryNode<Name extends SurfyObjectTypeName = SurfyObjectTypeName> {
+	readonly name: Name;
+	readonly _?: readonly SurfyQueryTreeNode[];
+	readonly filters?: readonly SurfyQueryFilter[];
+	readonly pagination?: SurfyQueryNodePagination;
+	readonly order?: string;
+	readonly required?: boolean;
+	readonly totalCount?: boolean;
+}
+export declare function createFilter<Column extends string>(operator: SurfyWhereOperator, column: Column, value: SurfyFilterValue): SurfyQueryFilter<Column>;
+export type SurfyRequestAuth = {
+	readonly baseUrl: string;
+	readonly tenant: string;
+	readonly getAccessToken: () => Promise<string>;
+	readonly locale?: string;
+	/**
+	 * Forbidden — machine JWT via {@link SurfyRequestAuth.getAccessToken} only.
+	 * Present as `never` so TypeScript rejects integrator mistakes at compile time.
+	 */
+	readonly clientSecret?: never;
+};
+export declare const SURFY_ENTITIES_ROUTE = "/api/v1/data/entities";
+export type SurfyClientOptions = SurfyRequestAuth;
+/**
+ * Isomorphic Surfy data client — inject `baseUrl` (origin) at creation.
+ * Primary API: {@link SurfyClient.fetchEntities} with your own QueryNode
+ * (business queries stay in the app, not in the SDK).
+ */
+export declare class SurfyClient {
+	private readonly auth;
+	private constructor();
+	static create(options: SurfyClientOptions): SurfyClient;
+	get baseUrl(): string;
+	get tenant(): string;
+	/**
+	 * POST `/api/v1/data/entities` — pass any QueryNode you build in app code.
+	 */
+	fetchEntities<T>(queryNode: SurfyQueryNode, signal?: AbortSignal): Promise<T[]>;
+}
 /** Published SDK semver — bump on public API changes. */
 export declare const SURFY_SDK_VERSION = "0.2.0";
 /** 2D floor layout Web Component. */
 export declare const SURFY_FLOOR_LAYOUT_2D_TAG = "surfy-floor-layout-2d";
 /** 3D building layout Web Component — CubyV2 (multi-floor or single-floor focus). */
 export declare const SURFY_BUILDING_LAYOUT_3D_TAG = "surfy-building-layout-3d";
+/**
+ * Three-surface semantic parity matrix (WC ↔ API JS ↔ Surfy React Web).
+ * React names are the frozen target contract (hooks/components land in M2).
+ */
+export type SurfySemanticCapability = "auth" | "tenant" | "baseUrl" | "locale" | "fillParent" | "layoutId" | "floorIds" | "colors" | "theme" | "options3d" | "fit" | "zoom" | "pins" | "hover" | "select" | "errors" | "ready";
+export interface SurfySemanticParityRow {
+	readonly capability: SurfySemanticCapability;
+	/** Web Component attribute, method, or CustomEvent name. */
+	readonly wc: string;
+	/** SurfySdk.mount* option or SurfyLayout handle method. */
+	readonly apiJs: string;
+	/** Surfy React Web prop / callback / imperative handle (M2 target). */
+	readonly react: string;
+}
+export declare const SURFY_SEMANTIC_PARITY_MATRIX: readonly SurfySemanticParityRow[];
+export declare function listSemanticParityCapabilities(): readonly SurfySemanticCapability[];
 /** Registers layout Web Components (`surfy-floor-layout-2d`, `surfy-building-layout-3d`). */
 export declare function registerSurfyLayoutElements(): void;
 /** Global Surfy SDK facade — runtime value from the ESM bundle. */
