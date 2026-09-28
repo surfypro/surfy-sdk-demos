@@ -1,7 +1,9 @@
 {
   "name": "@surfy/surfy-sdk",
+  "version": "0.3.0",
+  "description": "Surfy integrator SDK — layout WC, Surfy React Web, isomorphic client (workspace artefact until npm publish).",
+  "license": "UNLICENSED",
   "private": true,
-  "version": "0.0.0-local",
   "type": "module",
   "main": "./index.js",
   "module": "./index.js",
@@ -9,11 +11,40 @@
   "exports": {
     ".": {
       "types": "./index.d.ts",
-      "import": "./index.js"
+      "import": "./index.js",
+      "default": "./index.js"
     },
     "./client": {
       "types": "./client.d.ts",
-      "import": "./client.js"
-    }
+      "import": "./client.js",
+      "default": "./client.js"
+    },
+    "./react": {
+      "types": "./react.d.ts",
+      "import": "./react.js",
+      "default": "./react.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true },
+    "react-dom": { "optional": true }
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "client.js",
+    "client.d.ts",
+    "react.js",
+    "react.d.ts",
+    "package.json"
+  ],
+  "surfy": {
+    "workspaceAlias": "file:./dist/surfy-sdk",
+    "note": "Until npm publish: pnpm build:sdk then depend on file:../surfy/dist/surfy-sdk (or worktree path)."
   }
 }

@@ -28,7 +28,15 @@ export const DEMO_SECTIONS: readonly DemoSectionConfig[] = [
     kind: 'building-3d',
     entityKind: 'building',
     description:
-      'Vue 3D CubyV2 — multi-étages ou focus un étage via floorIds (pas de kind floor-3d).',
+      'Vue 3D CubyV2 multi-étages (ou subset floorIds) — navigation entre étages possible.',
+  },
+  {
+    id: 'floor-3d',
+    label: 'Étage 3D',
+    kind: 'floor-3d',
+    entityKind: 'floor',
+    description:
+      'Vue 3D CubyV2 verrouillée sur un seul étage — building déduit, pas de switch interne.',
   },
   {
     id: 'data-api',

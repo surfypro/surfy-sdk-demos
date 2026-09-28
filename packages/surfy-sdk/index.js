@@ -44,11 +44,13 @@ var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require
 //#endregion
 //#region src/surfy-sdk/constants.ts
 /** Published SDK semver — bump on public API changes. */
-var SURFY_SDK_VERSION = "0.2.0";
+var SURFY_SDK_VERSION = "0.3.0";
 /** 2D floor layout Web Component. */
 var SURFY_FLOOR_LAYOUT_2D_TAG = "surfy-floor-layout-2d";
 /** 3D building layout Web Component — CubyV2 (multi-floor or single-floor focus). */
 var SURFY_BUILDING_LAYOUT_3D_TAG = "surfy-building-layout-3d";
+/** 3D single-floor layout Web Component — CubyV2 locked to one floor. */
+var SURFY_FLOOR_LAYOUT_3D_TAG = "surfy-floor-layout-3d";
 var LAYOUT_FLOOR_DATA_ROUTE = "/api/v1/layout/floor/data";
 var LAYOUT_BUILDING_DATA_ROUTE = "/api/v1/layout/buildings/data";
 //#endregion
@@ -110765,6 +110767,55 @@ var EMBED_ASSET_STYLESHEETS = [
 	"/assets/surfyicon/styles.css",
 	"/assets/icomoon/style.css"
 ];
+/**
+* Absolute webfont files (same families as `webFontPairs`).
+* Cuby room icons rasterize glyphs via canvas (`getRoomIconMesh`) — CSS in Shadow DOM
+* never reaches that path; fonts must be registered on `document.fonts`.
+*/
+var EMBED_FONT_FILES = [
+	{
+		name: "surfyicon",
+		weight: "400",
+		path: "/assets/surfyicon/fonts/surfyicon.woff"
+	},
+	{
+		name: "icomoon",
+		weight: "400",
+		path: "/assets/icomoon/fonts/icomoon.woff2"
+	},
+	{
+		name: "Font Awesome 7 Pro",
+		weight: "100",
+		path: "/assets/fontawesome/webfonts/fa-thin-100.woff2"
+	},
+	{
+		name: "Font Awesome 7 Pro",
+		weight: "300",
+		path: "/assets/fontawesome/webfonts/fa-light-300.woff2"
+	},
+	{
+		name: "Font Awesome 7 Pro",
+		weight: "400",
+		path: "/assets/fontawesome/webfonts/fa-regular-400.woff2"
+	},
+	{
+		name: "Font Awesome 7 Pro",
+		weight: "900",
+		path: "/assets/fontawesome/webfonts/fa-solid-900.woff2"
+	},
+	{
+		name: "Font Awesome 7 Brands",
+		weight: "400",
+		path: "/assets/fontawesome/webfonts/fa-brands-400.woff2"
+	},
+	{
+		name: "Font Awesome 7 Duotone",
+		weight: "900",
+		path: "/assets/fontawesome/webfonts/fa-duotone-900.woff2"
+	}
+];
+var SURFY_SDK_FONT_ASSET_ATTR = "data-surfy-sdk-font-asset";
+var STYLESHEET_WAIT_MS = 8e3;
 function createShadowEmotionCache(shadowRoot) {
 	const cache = createCache({
 		key: "surfy-sdk",
@@ -110776,17 +110827,105 @@ function createShadowEmotionCache(shadowRoot) {
 function normalizeBaseUrl$1(baseUrl) {
 	return baseUrl.replace(/\/$/, "");
 }
-/** Loads Surfy icon font stylesheets into the shadow root (same assets as the main SPA). */
+function findEmbedStylesheetLink(parent, assetPath) {
+	return parent.querySelector(`link[${SURFY_SDK_FONT_ASSET_ATTR}="${assetPath}"]`);
+}
+function upsertEmbedStylesheetLink(parent, baseUrl, assetPath) {
+	const existing = findEmbedStylesheetLink(parent, assetPath);
+	if (existing) return existing;
+	const link = document.createElement("link");
+	link.rel = "stylesheet";
+	link.href = `${normalizeBaseUrl$1(baseUrl)}${assetPath}`;
+	link.setAttribute(SURFY_SDK_FONT_ASSET_ATTR, assetPath);
+	parent.insertBefore(link, parent.firstChild);
+	return link;
+}
+function injectEmbedStylesheetLinks(parent, baseUrl) {
+	return EMBED_ASSET_STYLESHEETS.map((assetPath) => upsertEmbedStylesheetLink(parent, baseUrl, assetPath));
+}
+/**
+* Loads Surfy icon font stylesheets into the shadow root (DOM :before icons)
+* and `document.head` (helps CSS consumers). Canvas Cuby icons still need {@link ensureEmbedIconFonts}.
+*/
 function injectEmbedStylesheets(shadowRoot, baseUrl) {
-	const normalizedBaseUrl = normalizeBaseUrl$1(baseUrl);
-	for (const assetPath of EMBED_ASSET_STYLESHEETS) {
-		if (shadowRoot.querySelector(`link[data-surfy-asset="${assetPath}"]`)) continue;
-		const link = document.createElement("link");
-		link.rel = "stylesheet";
-		link.href = `${normalizedBaseUrl}${assetPath}`;
-		link.dataset.surfyAsset = assetPath;
-		shadowRoot.insertBefore(link, shadowRoot.firstChild);
+	injectEmbedStylesheetLinks(shadowRoot, baseUrl);
+	injectEmbedStylesheetLinks(document.head, baseUrl);
+}
+function waitForStylesheetLink(link) {
+	if (link.sheet) return Promise.resolve();
+	return new Promise((resolve) => {
+		let settled = false;
+		const finish = () => {
+			if (settled) return;
+			settled = true;
+			window.clearTimeout(timeoutId);
+			link.removeEventListener("load", finish);
+			link.removeEventListener("error", finish);
+			resolve();
+		};
+		const timeoutId = window.setTimeout(finish, STYLESHEET_WAIT_MS);
+		link.addEventListener("load", finish);
+		link.addEventListener("error", finish);
+	});
+}
+function fontCheckQuery(name, weight) {
+	return `${weight} 16px "${name}"`;
+}
+function warmUpCanvasFonts() {
+	const canvas = document.createElement("canvas");
+	const ctx = canvas.getContext("2d");
+	if (!ctx) return;
+	for (const font of EMBED_FONT_FILES) {
+		ctx.font = `${font.weight} 16px "${font.name}"`;
+		ctx.fillText(".", 0, 16);
 	}
+	canvas.remove();
+}
+async function registerFontFacesFromOrigin(origin) {
+	if (typeof FontFace === "undefined" || !document.fonts) return 0;
+	const base = normalizeBaseUrl$1(origin);
+	let loadedCount = 0;
+	await Promise.all(EMBED_FONT_FILES.map(async (font) => {
+		const query = fontCheckQuery(font.name, font.weight);
+		if (document.fonts.check(query)) {
+			loadedCount += 1;
+			return;
+		}
+		try {
+			const loaded = await new FontFace(font.name, `url(${base}${font.path})`, {
+				style: "normal",
+				weight: font.weight,
+				display: "block"
+			}).load();
+			document.fonts.add(loaded);
+			if (document.fonts.check(query)) loadedCount += 1;
+		} catch {}
+	}));
+	return loadedCount;
+}
+function resolveFontOrigins(baseUrl) {
+	const origins = [];
+	const normalized = normalizeBaseUrl$1(baseUrl);
+	if (normalized) origins.push(normalized);
+	if (typeof window !== "undefined" && window.location?.origin) {
+		const pageOrigin = window.location.origin;
+		if (pageOrigin && pageOrigin !== normalized) origins.push(pageOrigin);
+	}
+	return origins;
+}
+/**
+* Ensures SDK icon fonts are registered on `document.fonts` before Cuby rasterizes
+* room-type glyphs to canvas. Tries `baseUrl` then the page origin (Vite / same-host demos).
+* Soft-fails so Storybook hosts with a fake `baseUrl` still mount.
+*/
+async function ensureEmbedIconFonts(baseUrl, shadowRoot) {
+	if (!baseUrl) return;
+	const stylesheetOrigin = normalizeBaseUrl$1(baseUrl);
+	const links = shadowRoot ? [...injectEmbedStylesheetLinks(shadowRoot, stylesheetOrigin), ...injectEmbedStylesheetLinks(document.head, stylesheetOrigin)] : injectEmbedStylesheetLinks(document.head, stylesheetOrigin);
+	await Promise.all(links.map(waitForStylesheetLink));
+	for (const origin of resolveFontOrigins(baseUrl)) if (await registerFontFacesFromOrigin(origin) > 0) break;
+	if (document.fonts) await document.fonts.ready;
+	warmUpCanvasFonts();
 }
 //#endregion
 //#region src/surfy-sdk/embed/fillParentAttribute.helper.ts
@@ -177491,11 +177630,13 @@ var embedSecurityStore = {
 	}
 };
 function ensureCurrentCompany(store, tenant) {
-	if (!store.get(currentCompanyAtom)) store.set(currentCompanyAtom, {
-		id: 0,
+	const current = store.get(currentCompanyAtom);
+	if (current?.name === tenant) return;
+	store.set(currentCompanyAtom, {
+		id: current?.id ?? 0,
 		name: tenant,
-		workingDaysCount: 5,
-		planningNumberOfDays: 14
+		workingDaysCount: current?.workingDaysCount ?? 5,
+		planningNumberOfDays: current?.planningNumberOfDays ?? 14
 	});
 }
 function seedEmbedContextStores(store, tenant, allLoadersReady) {
@@ -177593,25 +177734,30 @@ init_esm();
 function SimpleBuildingPlanContent(props) {
 	const { instanceId, buildingId, tenant, baseUrl, getAccessToken, locale = "en", layoutData, roomColors, layout3dOptions, fillParent, tooltipPortalContainer, themeOptions, skipMasterDataPrepare = false, onReady, onError, onRoomHover, onRoomSelected } = props;
 	const contextId = (0, import_react.useMemo)(() => getSimpleBuildingContextId(buildingId, instanceId), [buildingId, instanceId]);
-	const [embedReady, setEmbedReady] = (0, import_react.useState)(skipMasterDataPrepare);
+	const [embedReady, setEmbedReady] = (0, import_react.useState)(false);
 	(0, import_react.useEffect)(() => {
-		if (skipMasterDataPrepare) {
-			setEmbedReady(true);
-			return;
-		}
 		const abortController = new AbortController();
-		prepareSimpleEmbedContext({
-			tenant,
-			baseUrl,
-			getAccessToken,
-			signal: abortController.signal
-		}).then(() => {
-			if (!abortController.signal.aborted) setEmbedReady(true);
-		}).catch((error) => {
-			if (abortController.signal.aborted) return;
-			setEmbedReady(false);
-			onError?.(mapEmbedMasterDataError(error));
-		});
+		(async () => {
+			try {
+				await ensureEmbedIconFonts(baseUrl);
+				if (abortController.signal.aborted) return;
+				if (skipMasterDataPrepare) {
+					setEmbedReady(true);
+					return;
+				}
+				await prepareSimpleEmbedContext({
+					tenant,
+					baseUrl,
+					getAccessToken,
+					signal: abortController.signal
+				});
+				if (!abortController.signal.aborted) setEmbedReady(true);
+			} catch (error) {
+				if (abortController.signal.aborted) return;
+				setEmbedReady(false);
+				onError?.(mapEmbedMasterDataError(error));
+			}
+		})();
 		return () => {
 			abortController.abort();
 		};
@@ -177704,7 +177850,7 @@ function updateSimpleBuildingRoom(contextId, roomId, options) {
 }
 //#endregion
 //#region src/surfy-sdk/elements/SurfyBuildingLayout3dElement.tsx
-var OBSERVED_ATTRIBUTES$1 = [
+var OBSERVED_ATTRIBUTES$2 = [
 	"building-id",
 	"tenant",
 	"base-url",
@@ -177712,7 +177858,7 @@ var OBSERVED_ATTRIBUTES$1 = [
 	"fill-parent",
 	"floor-ids"
 ];
-var instanceCounter$1 = 0;
+var instanceCounter$2 = 0;
 var SurfyBuildingLayout3dElementImpl = class extends HTMLElement {
 	#shadow;
 	#mountHost;
@@ -177727,12 +177873,12 @@ var SurfyBuildingLayout3dElementImpl = class extends HTMLElement {
 	#instanceId;
 	#emotionCache;
 	static get observedAttributes() {
-		return OBSERVED_ATTRIBUTES$1;
+		return OBSERVED_ATTRIBUTES$2;
 	}
 	constructor() {
 		super();
-		instanceCounter$1 += 1;
-		this.#instanceId = String(instanceCounter$1);
+		instanceCounter$2 += 1;
+		this.#instanceId = String(instanceCounter$2);
 		this.#shadow = this.attachShadow({ mode: "open" });
 		this.#emotionCache = createShadowEmotionCache(this.#shadow);
 		this.#mountHost = document.createElement("div");
@@ -177765,12 +177911,7 @@ var SurfyBuildingLayout3dElementImpl = class extends HTMLElement {
 	}
 	connectedCallback() {
 		this.#applyHostStyles();
-		this.#syncEmbedAssets();
 		this.#loadLayout();
-	}
-	#syncEmbedAssets() {
-		const baseUrl = this.getAttribute("base-url");
-		if (baseUrl) injectEmbedStylesheets(this.#shadow, baseUrl);
 	}
 	disconnectedCallback() {
 		this.#abortController?.abort();
@@ -177786,7 +177927,6 @@ var SurfyBuildingLayout3dElementImpl = class extends HTMLElement {
 		}
 		if (name === "floor-ids") this.#fetchFloorIds = parseFloorIdsAttribute(newValue);
 		if (!this.isConnected) return;
-		if (name === "base-url") this.#syncEmbedAssets();
 		if (name === "building-id" || name === "tenant" || name === "base-url" || name === "locale" || name === "floor-ids") this.#loadLayout();
 	}
 	setAccessTokenProvider(provider) {
@@ -177887,15 +178027,18 @@ var SurfyBuildingLayout3dElementImpl = class extends HTMLElement {
 		const baseUrl = this.getAttribute("base-url") ?? "";
 		const locale = this.getAttribute("locale") ?? "en";
 		try {
-			this.#layout = await fetchBuildingLayoutData({
+			const signal = this.#abortController.signal;
+			const [layout] = await Promise.all([fetchBuildingLayoutData({
 				baseUrl,
 				tenant,
 				buildingId,
 				floorIds: this.#fetchFloorIds ?? parseFloorIdsAttribute(this.getAttribute("floor-ids")),
 				getAccessToken: this.#accessTokenProvider,
 				locale,
-				signal: this.#abortController.signal
-			});
+				signal
+			}), ensureEmbedIconFonts(baseUrl, this.#shadow)]);
+			if (signal.aborted) return;
+			this.#layout = layout;
 			this.#renderReact();
 		} catch (error) {
 			if (error.name === "AbortError") return;
@@ -184373,25 +184516,30 @@ init_esm();
 function SimpleFloorPlanContent(props) {
 	const { instanceId, floorId, tenant, baseUrl, getAccessToken, locale = "en", layoutData, roomColors, fillParent, tooltipPortalContainer, themeOptions, skipMasterDataPrepare = false, onReady, onError, onRoomHover, onRoomSelected } = props;
 	const workCanvasId = (0, import_react.useMemo)(() => getSimpleFloorWorkCanvasId(floorId, instanceId), [floorId, instanceId]);
-	const [embedReady, setEmbedReady] = (0, import_react.useState)(skipMasterDataPrepare);
+	const [embedReady, setEmbedReady] = (0, import_react.useState)(false);
 	(0, import_react.useEffect)(() => {
-		if (skipMasterDataPrepare) {
-			setEmbedReady(true);
-			return;
-		}
 		const abortController = new AbortController();
-		prepareSimpleEmbedContext({
-			tenant,
-			baseUrl,
-			getAccessToken,
-			signal: abortController.signal
-		}).then(() => {
-			if (!abortController.signal.aborted) setEmbedReady(true);
-		}).catch((error) => {
-			if (abortController.signal.aborted) return;
-			setEmbedReady(false);
-			onError?.(mapEmbedMasterDataError(error));
-		});
+		(async () => {
+			try {
+				await ensureEmbedIconFonts(baseUrl);
+				if (abortController.signal.aborted) return;
+				if (skipMasterDataPrepare) {
+					setEmbedReady(true);
+					return;
+				}
+				await prepareSimpleEmbedContext({
+					tenant,
+					baseUrl,
+					getAccessToken,
+					signal: abortController.signal
+				});
+				if (!abortController.signal.aborted) setEmbedReady(true);
+			} catch (error) {
+				if (abortController.signal.aborted) return;
+				setEmbedReady(false);
+				onError?.(mapEmbedMasterDataError(error));
+			}
+		})();
 		return () => {
 			abortController.abort();
 		};
@@ -184466,14 +184614,14 @@ function setSimpleFloorRoomColors(workCanvasId, colors) {
 }
 //#endregion
 //#region src/surfy-sdk/elements/SurfyFloorLayout2dElement.tsx
-var OBSERVED_ATTRIBUTES = [
+var OBSERVED_ATTRIBUTES$1 = [
 	"floor-id",
 	"tenant",
 	"base-url",
 	"locale",
 	"fill-parent"
 ];
-var instanceCounter = 0;
+var instanceCounter$1 = 0;
 var SurfyFloorLayout2dElementImpl = class extends HTMLElement {
 	#shadow;
 	#mountHost;
@@ -184486,12 +184634,12 @@ var SurfyFloorLayout2dElementImpl = class extends HTMLElement {
 	#instanceId;
 	#emotionCache;
 	static get observedAttributes() {
-		return OBSERVED_ATTRIBUTES;
+		return OBSERVED_ATTRIBUTES$1;
 	}
 	constructor() {
 		super();
-		instanceCounter += 1;
-		this.#instanceId = String(instanceCounter);
+		instanceCounter$1 += 1;
+		this.#instanceId = String(instanceCounter$1);
 		this.#shadow = this.attachShadow({ mode: "open" });
 		this.#emotionCache = createShadowEmotionCache(this.#shadow);
 		this.#mountHost = document.createElement("div");
@@ -184524,12 +184672,7 @@ var SurfyFloorLayout2dElementImpl = class extends HTMLElement {
 	}
 	connectedCallback() {
 		this.#applyHostStyles();
-		this.#syncEmbedAssets();
 		this.#loadLayout();
-	}
-	#syncEmbedAssets() {
-		const baseUrl = this.getAttribute("base-url");
-		if (baseUrl) injectEmbedStylesheets(this.#shadow, baseUrl);
 	}
 	disconnectedCallback() {
 		this.#abortController?.abort();
@@ -184544,7 +184687,6 @@ var SurfyFloorLayout2dElementImpl = class extends HTMLElement {
 			return;
 		}
 		if (!this.isConnected) return;
-		if (name === "base-url") this.#syncEmbedAssets();
 		if (name === "floor-id" || name === "tenant" || name === "base-url" || name === "locale") this.#loadLayout();
 	}
 	setAccessTokenProvider(provider) {
@@ -184632,14 +184774,17 @@ var SurfyFloorLayout2dElementImpl = class extends HTMLElement {
 		const baseUrl = this.getAttribute("base-url") ?? "";
 		const locale = this.getAttribute("locale") ?? "en";
 		try {
-			this.#layout = await fetchFloorLayoutData({
+			const signal = this.#abortController.signal;
+			const [layout] = await Promise.all([fetchFloorLayoutData({
 				baseUrl,
 				tenant,
 				floorId,
 				getAccessToken: this.#accessTokenProvider,
 				locale,
-				signal: this.#abortController.signal
-			});
+				signal
+			}), ensureEmbedIconFonts(baseUrl, this.#shadow)]);
+			if (signal.aborted) return;
+			this.#layout = layout;
 			this.#renderReact();
 		} catch (error) {
 			if (error.name === "AbortError") return;
@@ -184746,11 +184891,349 @@ var SurfyFloorLayout2dElementImpl = class extends HTMLElement {
 	}
 };
 //#endregion
+//#region src/surfy-sdk/helpers/resolveBuildingIdFromFloorLayout.helper.ts
+/**
+* Deduce building id from a floor layout payload (floor endpoint response).
+* Prefers `floors[].buildingId` for the mounted floor; else a single `buildings` record key.
+*/
+function resolveBuildingIdFromFloorLayout(layout, floorId) {
+	const floor = layout.floors?.find((entry) => entry.id === floorId);
+	if (floor?.buildingId != null && Number.isFinite(floor.buildingId)) return floor.buildingId;
+	const buildingIds = listBuildingIds(layout.buildings);
+	if (buildingIds.length === 1) return buildingIds[0];
+	return null;
+}
+function listBuildingIds(buildings) {
+	if (!buildings) return [];
+	if (Array.isArray(buildings)) return buildings.map((building) => building.id).filter((id) => Number.isFinite(id));
+	return Object.keys(buildings).map(Number).filter((id) => Number.isFinite(id));
+}
+//#endregion
+//#region src/surfy-sdk/elements/SurfyFloorLayout3dElement.tsx
+var OBSERVED_ATTRIBUTES = [
+	"floor-id",
+	"tenant",
+	"base-url",
+	"locale",
+	"fill-parent"
+];
+var instanceCounter = 0;
+function lockFloor3dOptions(floorId, options) {
+	return {
+		...options,
+		selectedFloorIds: [floorId]
+	};
+}
+var SurfyFloorLayout3dElementImpl = class extends HTMLElement {
+	#shadow;
+	#mountHost;
+	#reactRoot;
+	#accessTokenProvider;
+	#roomColors = {};
+	#themeOptions;
+	#layout3dOptions = {};
+	#layout;
+	#buildingId;
+	#abortController;
+	#instanceId;
+	#emotionCache;
+	static get observedAttributes() {
+		return OBSERVED_ATTRIBUTES;
+	}
+	constructor() {
+		super();
+		instanceCounter += 1;
+		this.#instanceId = String(instanceCounter);
+		this.#shadow = this.attachShadow({ mode: "open" });
+		this.#emotionCache = createShadowEmotionCache(this.#shadow);
+		this.#mountHost = document.createElement("div");
+		this.#mountHost.style.width = "100%";
+		this.#mountHost.style.height = "100%";
+		this.#mountHost.style.minHeight = "320px";
+		this.#shadow.appendChild(this.#mountHost);
+	}
+	#floorId() {
+		return Number(this.getAttribute("floor-id"));
+	}
+	#hasFillParentAttribute() {
+		return isFillParentAttributeEnabled(this);
+	}
+	#applyFillParentLayout() {
+		if (this.#hasFillParentAttribute()) {
+			this.style.width = "100%";
+			this.style.height = "100%";
+			this.#mountHost.style.display = "flex";
+			this.#mountHost.style.flexDirection = "column";
+			this.#mountHost.style.minHeight = "0";
+			return;
+		}
+		this.style.removeProperty("width");
+		this.style.removeProperty("height");
+		this.#mountHost.style.removeProperty("display");
+		this.#mountHost.style.removeProperty("flex-direction");
+		this.#mountHost.style.minHeight = "320px";
+	}
+	#applyHostStyles() {
+		this.style.display = "block";
+		this.#applyFillParentLayout();
+	}
+	connectedCallback() {
+		this.#applyHostStyles();
+		this.#syncEmbedAssets();
+		this.#loadLayout();
+	}
+	#syncEmbedAssets() {
+		const baseUrl = this.getAttribute("base-url");
+		if (baseUrl) injectEmbedStylesheets(this.#shadow, baseUrl);
+	}
+	disconnectedCallback() {
+		this.#abortController?.abort();
+		this.#reactRoot?.unmount();
+		this.#reactRoot = void 0;
+	}
+	attributeChangedCallback(name, oldValue, newValue) {
+		if (oldValue === newValue) return;
+		if (name === "fill-parent") {
+			this.#applyFillParentLayout();
+			if (this.isConnected) this.#renderReact();
+			return;
+		}
+		if (!this.isConnected) return;
+		if (name === "floor-id" || name === "tenant" || name === "base-url" || name === "locale") this.#loadLayout();
+	}
+	setAccessTokenProvider(provider) {
+		this.#accessTokenProvider = provider;
+		if (this.isConnected) this.#loadLayout();
+	}
+	setTheme(theme) {
+		this.#themeOptions = theme ?? void 0;
+		this.#renderReact();
+	}
+	setRoomColors(colors) {
+		this.#roomColors = { ...colors };
+		this.#applyRoomColors();
+		this.#renderReact();
+	}
+	clearRoomColors() {
+		this.#roomColors = {};
+		this.#applyRoomColors();
+		this.#renderReact();
+	}
+	setOptions(options) {
+		const locked = lockFloor3dOptions(this.#floorId(), {
+			...this.#layout3dOptions,
+			...options
+		});
+		this.#layout3dOptions = locked;
+		if (this.#buildingId != null) applySimpleBuildingLayout3dOptions(this.#getContextId(), locked);
+		this.#renderReact();
+	}
+	fitToView() {
+		if (this.#buildingId == null) return;
+		fitSimpleBuildingLayout3dToView(this.#getContextId());
+	}
+	zoomOn(options) {
+		if (this.#buildingId == null) return;
+		if (!resolveZoomOnSelection(options)) return;
+		zoomOnSimpleBuildingLayout3d(this.#getContextId(), options);
+	}
+	addPin(spec) {
+		return this.#pinController().addPin(spec);
+	}
+	removePin(id) {
+		this.#pinController().removePin(id);
+	}
+	clearPins() {
+		this.#pinController().clearPins();
+	}
+	listPins() {
+		return this.#pinController().listPins();
+	}
+	zoomToPin(options) {
+		this.#pinController().zoomToPin(options);
+	}
+	updateRoom(roomId, options) {
+		if (options.color !== void 0) {
+			if (options.color === null) {
+				const nextColors = { ...this.#roomColors };
+				delete nextColors[roomId];
+				this.#roomColors = nextColors;
+			} else this.#roomColors = {
+				...this.#roomColors,
+				[roomId]: options.color
+			};
+		}
+		if (this.#buildingId != null) updateSimpleBuildingRoom(this.#getContextId(), roomId, options);
+		if (options.color !== void 0) {
+			this.#applyRoomColors();
+			this.#renderReact();
+		}
+	}
+	#pinController() {
+		const floorId = this.#floorId();
+		return createSdkPinController({
+			contextId: this.#getContextId(),
+			layoutKind: "floor-3d",
+			getDefaultFloorId: () => floorId,
+			onPinsChanged: () => this.#renderReact(),
+			zoomToLayoutPoint: ({ floorId: pinFloorId, x, y, diameterMeters, animate }) => {
+				zoomOnSimpleBuildingLayout3d(this.#getContextId(), {
+					floorId: pinFloorId,
+					x,
+					y,
+					diameterMeters,
+					animate
+				});
+			}
+		});
+	}
+	async #loadLayout() {
+		const configError = this.#getConfigError();
+		if (configError) {
+			this.#dispatchError(configError);
+			return;
+		}
+		this.#abortController?.abort();
+		this.#abortController = new AbortController();
+		const floorId = this.#floorId();
+		const tenant = this.getAttribute("tenant") ?? "";
+		const baseUrl = this.getAttribute("base-url") ?? "";
+		const locale = this.getAttribute("locale") ?? "en";
+		try {
+			const layout = await fetchFloorLayoutData({
+				baseUrl,
+				tenant,
+				floorId,
+				getAccessToken: this.#accessTokenProvider,
+				locale,
+				signal: this.#abortController.signal
+			});
+			const buildingId = resolveBuildingIdFromFloorLayout(layout, floorId);
+			if (buildingId == null) {
+				this.#dispatchError({
+					code: "SDK_CONFIG",
+					message: `Could not resolve buildingId from floor layout for floorId ${floorId}`
+				});
+				return;
+			}
+			this.#layout = layout;
+			this.#buildingId = buildingId;
+			this.#layout3dOptions = lockFloor3dOptions(floorId, this.#layout3dOptions);
+			this.#renderReact();
+		} catch (error) {
+			if (error.name === "AbortError") return;
+			this.#dispatchError(this.#mapFetchError(error));
+		}
+	}
+	#getContextId() {
+		return getSimpleBuildingContextId(this.#buildingId ?? 0, this.#instanceId);
+	}
+	#applyRoomColors() {
+		if (this.#buildingId == null) return;
+		setSimpleBuildingRoomColors(this.#getContextId(), this.#roomColors);
+	}
+	#renderReact() {
+		if (!this.#layout || this.#buildingId == null) return;
+		const floorId = this.#floorId();
+		const tenant = this.getAttribute("tenant") ?? "";
+		const locale = this.getAttribute("locale") ?? "en";
+		const baseUrl = this.getAttribute("base-url") ?? "";
+		const lockedOptions = lockFloor3dOptions(floorId, this.#layout3dOptions);
+		if (!this.#reactRoot) this.#reactRoot = (0, import_client.createRoot)(this.#mountHost);
+		this.#reactRoot.render(/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SimpleBuildingPlanRoot, {
+			instanceId: this.#instanceId,
+			buildingId: this.#buildingId,
+			tenant,
+			baseUrl,
+			getAccessToken: this.#accessTokenProvider,
+			locale,
+			layoutData: this.#layout,
+			roomColors: this.#roomColors,
+			layout3dOptions: lockedOptions,
+			fillParent: this.#hasFillParentAttribute(),
+			emotionCache: this.#emotionCache,
+			tooltipPortalContainer: this.#mountHost,
+			themeOptions: this.#themeOptions,
+			onReady: () => {
+				this.dispatchEvent(new CustomEvent("surfy:ready", {
+					bubbles: true,
+					detail: { floorId }
+				}));
+			},
+			onError: (detail) => {
+				this.#dispatchError(detail);
+			},
+			onRoomHover: (detail) => {
+				this.dispatchEvent(new CustomEvent("surfy:room-hover", {
+					bubbles: true,
+					detail
+				}));
+			},
+			onRoomSelected: (detail) => {
+				this.dispatchEvent(new CustomEvent("surfy:room-selected", {
+					bubbles: true,
+					detail
+				}));
+			}
+		}));
+	}
+	#getConfigError() {
+		if (!this.getAttribute("floor-id") || Number.isNaN(this.#floorId())) return {
+			code: "SDK_CONFIG",
+			message: "Missing or invalid floor-id attribute"
+		};
+		if (!this.getAttribute("tenant")) return {
+			code: "SDK_CONFIG",
+			message: "Missing tenant attribute"
+		};
+		if (!this.getAttribute("base-url")) return {
+			code: "SDK_CONFIG",
+			message: "Missing base-url attribute"
+		};
+		if (!this.#accessTokenProvider) return {
+			code: "SDK_CONFIG",
+			message: "Call setAccessTokenProvider() before loading"
+		};
+		return null;
+	}
+	#mapFetchError(error) {
+		const status = error.status;
+		const code = error.code;
+		if (code === "AUTH_EXPIRED" || status === 401) return {
+			code: "AUTH_EXPIRED",
+			message: "Authentication failed or token expired"
+		};
+		if (code === "AUTH_FORBIDDEN" || status === 403) return {
+			code: "AUTH_FORBIDDEN",
+			message: "Not allowed to load this floor"
+		};
+		if (status === 404) return {
+			code: "LAYOUT_NOT_FOUND",
+			message: "Floor layout not found"
+		};
+		if (error instanceof TypeError) return {
+			code: "NETWORK",
+			message: error.message
+		};
+		return {
+			code: "NETWORK",
+			message: error.message ?? "Floor layout fetch failed"
+		};
+	}
+	#dispatchError(detail) {
+		this.dispatchEvent(new CustomEvent("surfy:error", {
+			bubbles: true,
+			detail
+		}));
+	}
+};
+//#endregion
 //#region src/surfy-sdk/registerSurfyLayoutElements.ts
 /** Registers layout Web Components. */
 function registerSurfyLayoutElements() {
 	if (!customElements.get("surfy-floor-layout-2d")) customElements.define(SURFY_FLOOR_LAYOUT_2D_TAG, SurfyFloorLayout2dElementImpl);
 	if (!customElements.get("surfy-building-layout-3d")) customElements.define(SURFY_BUILDING_LAYOUT_3D_TAG, SurfyBuildingLayout3dElementImpl);
+	if (!customElements.get("surfy-floor-layout-3d")) customElements.define(SURFY_FLOOR_LAYOUT_3D_TAG, SurfyFloorLayout3dElementImpl);
 }
 //#endregion
 //#region src/surfy-sdk/client/queryNode.helpers.ts
@@ -184808,11 +185291,13 @@ var SurfyClient = class SurfyClient {
 /** @surfy-allow-barrel-reexports Public SDK entry re-exports mount handle types for consumers. */
 var KIND_TO_TAG = {
 	"floor-2d": SURFY_FLOOR_LAYOUT_2D_TAG,
-	"building-3d": SURFY_BUILDING_LAYOUT_3D_TAG
+	"building-3d": SURFY_BUILDING_LAYOUT_3D_TAG,
+	"floor-3d": SURFY_FLOOR_LAYOUT_3D_TAG
 };
 var KIND_ID_ATTRIBUTE = {
 	"floor-2d": "floor-id",
-	"building-3d": "building-id"
+	"building-3d": "building-id",
+	"floor-3d": "floor-id"
 };
 function assertBrowserEnvironment() {
 	if (globalThis.window === void 0 || globalThis.document === void 0) throw createSdkError("SDK_CONFIG", "SurfySdk requires a browser environment (globalThis.window and document).");
@@ -184990,6 +185475,24 @@ function mountBuilding3d(options) {
 	container.replaceChildren(element);
 	return createLayoutHandle("building-3d", tag, element, unbind);
 }
+function mountFloor3d(options) {
+	registerSurfyLayoutElements();
+	const container = resolveContainer(options.container, "mountFloor3d");
+	const tag = SURFY_FLOOR_LAYOUT_3D_TAG;
+	const element = createCustomElement(tag, "mountFloor3d");
+	element.setAttribute("floor-id", String(options.floorId));
+	applyCommonMountAttributes(element, options);
+	if (options.theme !== void 0) element.setTheme(options.theme);
+	if (options.options) element.setOptions({
+		...options.options,
+		selectedFloorIds: [options.floorId]
+	});
+	else element.setOptions({ selectedFloorIds: [options.floorId] });
+	element.setAccessTokenProvider(options.getAccessToken);
+	const unbind = bindLayoutListeners(element, options);
+	container.replaceChildren(element);
+	return createLayoutHandle("floor-3d", tag, element, unbind);
+}
 /** Global Surfy SDK facade — import once, mount layouts into a host container. */
 var SurfySdk = {
 	version: SURFY_SDK_VERSION,
@@ -185002,7 +185505,8 @@ var SurfySdk = {
 		return Boolean(customElements.get(KIND_TO_TAG[kind]));
 	},
 	mountFloor2d,
-	mountBuilding3d
+	mountBuilding3d,
+	mountFloor3d
 };
 //#endregion
 //#region src/surfy-sdk/types/public.ts
@@ -185129,4 +185633,4 @@ function listSemanticParityCapabilities() {
 //#region src/surfy-sdk/index.ts
 registerSurfyLayoutElements();
 //#endregion
-export { SURFY_BUILDING_LAYOUT_3D_TAG, SURFY_ENTITIES_ROUTE, SURFY_FLOOR_LAYOUT_2D_TAG, SURFY_SDK_ERROR_CODES, SURFY_SDK_VERSION, SURFY_SEMANTIC_PARITY_MATRIX, SurfyBuildingLayout3dElementImpl, SurfyClient, SurfyFloorLayout2dElementImpl, SurfySdk, createFilter, fetchBuildingLayoutData, fetchFloorLayoutData, listSemanticParityCapabilities, registerSurfyLayoutElements };
+export { SURFY_BUILDING_LAYOUT_3D_TAG, SURFY_ENTITIES_ROUTE, SURFY_FLOOR_LAYOUT_2D_TAG, SURFY_FLOOR_LAYOUT_3D_TAG, SURFY_SDK_ERROR_CODES, SURFY_SDK_VERSION, SURFY_SEMANTIC_PARITY_MATRIX, SurfyBuildingLayout3dElementImpl, SurfyClient, SurfyFloorLayout2dElementImpl, SurfyFloorLayout3dElementImpl, SurfySdk, createFilter, fetchBuildingLayoutData, fetchFloorLayoutData, listSemanticParityCapabilities, registerSurfyLayoutElements };

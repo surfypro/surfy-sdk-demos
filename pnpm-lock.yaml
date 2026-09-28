@@ -96,7 +96,14 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
 
-  packages/surfy-sdk: {}
+  packages/surfy-sdk:
+    dependencies:
+      react:
+        specifier: '>=18'
+        version: 19.2.7
+      react-dom:
+        specifier: '>=18'
+        version: 19.2.7(react@19.2.7)
 
 packages:
 

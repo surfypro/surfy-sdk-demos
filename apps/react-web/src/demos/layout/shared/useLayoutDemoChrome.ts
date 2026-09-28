@@ -5,11 +5,7 @@ import {
   snippetClearRoomColors,
   snippetSetRoomColors,
 } from '../../../demoApiSnippets';
-import {
-  getConfiguredDemoRoomId,
-  pickRandomItem,
-  waitForDemoRoomId,
-} from '../../../demoLayoutElement';
+import { isRenderedDemoRoom, pickRandomItem, waitForDemoRoomId } from '../../../demoLayoutElement';
 import { getDemoThemeOptions } from '../../../demoThemes';
 import { useDemoTheme } from '../../../useDemoTheme';
 import {
@@ -22,8 +18,8 @@ import {
 export type LayoutDemoBlink = { readonly roomId: number; readonly color: string };
 
 /**
- * Shared chrome for floor-2d / building-3d demos: events, colors, blink, snippets, theme.
- * Mount stays in each panel (`mountFloor2d` vs `mountBuilding3d`).
+ * Shared chrome for floor-2d / building-3d / floor-3d demos: events, colors, blink, snippets, theme.
+ * Mount stays in each panel. Zoom / color actions target rooms on the current layout only.
  */
 export function useLayoutDemoChrome(params: {
   readonly layoutRef: RefObject<SurfyLayout | null>;
@@ -33,7 +29,7 @@ export function useLayoutDemoChrome(params: {
   const { layoutRef, active, entityId } = params;
   const { themeId } = useDemoTheme();
   const [lastEvent, setLastEvent] = useState('none');
-  const [demoRoomId, setDemoRoomId] = useState<number | undefined>(getConfiguredDemoRoomId());
+  const [demoRoomId, setDemoRoomId] = useState<number | undefined>(undefined);
   const [fillParent, setFillParent] = useState(true);
   const [randomBlinkOn, setRandomBlinkOn] = useState(false);
   const [lastBlink, setLastBlink] = useState<LayoutDemoBlink | null>(null);
@@ -42,6 +38,11 @@ export function useLayoutDemoChrome(params: {
   const pushApiLine = useCallback((line: string) => {
     setApiLog((prev) => [...prev, line].slice(-API_LOG_MAX_LINES));
   }, []);
+
+  useEffect(() => {
+    setDemoRoomId(undefined);
+    setLastBlink(null);
+  }, [entityId]);
 
   useEffect(() => {
     layoutRef.current?.setFillParent(fillParent);
@@ -76,6 +77,9 @@ export function useLayoutDemoChrome(params: {
 
   const colorDemoRoom = useCallback(
     (roomId: number) => {
+      if (!isRenderedDemoRoom(layoutRef.current, roomId)) {
+        return;
+      }
       layoutRef.current?.setRoomColors({ [roomId]: DEMO_ROOM_COLOR });
       pushApiLine(snippetSetRoomColors(roomId, DEMO_ROOM_COLOR));
     },
@@ -108,9 +112,8 @@ export function useLayoutDemoChrome(params: {
         const current = layoutRef.current;
         if (!current) return;
         void waitForDemoRoomId(current).then((roomId) => {
-          if (roomId !== undefined) {
-            setDemoRoomId((prev) => prev ?? roomId);
-          }
+          // Always bind chrome actions to a room on the current layout (étage / visible floors).
+          setDemoRoomId(roomId);
         });
       },
       onRoomHover: (detail: { roomId: number; name: string } | null) => {
@@ -119,7 +122,10 @@ export function useLayoutDemoChrome(params: {
         );
       },
       onRoomSelected: (detail: { roomId: number; name: string }) => {
-        setDemoRoomId(detail.roomId);
+        const rendered = layoutRef.current?.getRenderedRoomIds() ?? [];
+        if (rendered.length === 0 || rendered.includes(detail.roomId)) {
+          setDemoRoomId(detail.roomId);
+        }
         setLastEvent(`surfy:room-selected ${detail.roomId} ${detail.name}`);
       },
       onError: (detail: SurfySdkErrorDetail) => {
@@ -132,6 +138,7 @@ export function useLayoutDemoChrome(params: {
   const resetOnUnmount = useCallback(() => {
     setRandomBlinkOn(false);
     setLastBlink(null);
+    setDemoRoomId(undefined);
     setApiLog([]);
     setLastEvent('none');
   }, []);

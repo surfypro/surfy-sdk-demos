@@ -28,7 +28,7 @@ export const SDK_FEATURE_MANIFEST: readonly SdkFeatureEntry[] = [
   {
     id: 'SurfySdk.tagForKind',
     category: 'facade',
-    description: 'Résout le tag Web Component pour floor-2d / building-3d',
+    description: 'Résout le tag Web Component pour floor-2d / building-3d / floor-3d',
   },
   {
     id: 'SurfySdk.isKindRegistered',
@@ -46,6 +46,12 @@ export const SDK_FEATURE_MANIFEST: readonly SdkFeatureEntry[] = [
     category: 'facade',
     description: 'Monte un bâtiment 3D Cuby dans le conteneur hôte',
     coveredBy: 'building-3d.spec.ts',
+  },
+  {
+    id: 'SurfySdk.mountFloor3d',
+    category: 'facade',
+    description: 'Monte un étage 3D Cuby verrouillé (floor-3d)',
+    coveredBy: 'sections.spec.ts',
   },
 
   // —— SurfyLayout handle ——

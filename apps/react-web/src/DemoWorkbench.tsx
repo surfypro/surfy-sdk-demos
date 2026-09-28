@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { DataApiDemoPanel } from './demos/data/DataApiDemoPanel';
 import { Building3dDemoPanel } from './demos/layout/building-3d/Building3dDemoPanel';
 import { Floor2dDemoPanel } from './demos/layout/floor-2d/Floor2dDemoPanel';
+import { Floor3dDemoPanel } from './demos/layout/floor-3d/Floor3dDemoPanel';
 import type { DemoAuthMode } from './demoRoutes';
 import {
   DEMO_SECTIONS,
@@ -159,6 +160,18 @@ export function DemoWorkbench({ embedded = false, authMode, activeSection }: Dem
           tenant={catalog.tenant}
           buildingId={buildingId}
           buildingFloors={selectedBuilding?.floors ?? EMPTY_FLOORS}
+          title={layoutSection.label}
+          description={layoutSection.description}
+        />
+      ) : null}
+
+      {catalog && layoutSection?.id === 'floor-3d' ? (
+        <Floor3dDemoPanel
+          key="floor-3d"
+          active
+          tenant={catalog.tenant}
+          floorId={floorId}
+          floor={selectedBuilding?.floors.find((f) => f.id === floorId)}
           title={layoutSection.label}
           description={layoutSection.description}
         />

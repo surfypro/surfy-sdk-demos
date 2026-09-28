@@ -4,12 +4,13 @@ import {
   attachBrowserErrorCollector,
   BUILDING_3D_DEMO_URL,
   DEFAULT_DEMO_URL,
+  FLOOR_3D_DEMO_URL,
 } from './helpers';
 
 const hasSdkCredentials = hasSurfySdkCredentials();
 
 test.describe('Demo sections', () => {
-  test('routes: floor-2d and building-3d when registered', async ({ page }) => {
+  test('routes: floor-2d, building-3d, floor-3d when registered', async ({ page }) => {
     test.setTimeout(hasSdkCredentials ? 90_000 : 30_000);
 
     const errors = attachBrowserErrorCollector(page);
@@ -29,7 +30,14 @@ test.describe('Demo sections', () => {
       await expect(page.getByTestId('demo-section-no-entity')).toBeVisible();
     }
 
-    await expect(page.getByTestId('demo-tab-floor-3d')).toHaveCount(0);
+    await expect(page.getByTestId('demo-tab-floor-3d')).toBeVisible();
+
+    await page.goto(FLOOR_3D_DEMO_URL);
+    await expect(page.getByTestId('demo-section-floor-3d')).toBeVisible();
+    await expect(page.getByTestId('demo-surface-toggle')).toBeVisible();
+    if (hasSdkCredentials) {
+      await expect(page.locator('surfy-floor-layout-3d')).toBeVisible({ timeout: 30_000 });
+    }
 
     errors.assertNoJsErrors();
   });

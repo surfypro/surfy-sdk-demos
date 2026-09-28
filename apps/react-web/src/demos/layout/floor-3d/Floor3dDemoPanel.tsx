@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SurfyLayout, SurfyLayout3dOptions, SurfyRoomUpdateOptions } from '@surfy/surfy-sdk';
 import { SurfySdk } from '@surfy/surfy-sdk';
 
@@ -16,46 +16,49 @@ import type { DemoFloor } from '../../../fetchDemoCatalog';
 import { getSurfyDemoBaseUrl } from '../../../surfyEnv';
 import { ApiSnippetPanel } from '../actions/ApiSnippetPanel';
 import type { DemoSurfaceMode } from '../shared/demoSurfaceMode';
-import { DemoReactBuildingHost } from '../shared/DemoReactLayoutHost';
+import { DemoReactFloorHost } from '../shared/DemoReactLayoutHost';
+import { Layout3dDemoControls } from '../shared/Layout3dDemoControls';
+import { buildInitialFloor3dOptions } from '../shared/layout3dDemo.constants';
 import { LayoutDemoCommonActions } from '../shared/LayoutDemoCommonActions';
 import { LayoutDemoShell } from '../shared/LayoutDemoShell';
 import { useLayoutDemoChrome } from '../shared/useLayoutDemoChrome';
-import { Building3dDemoControls } from './Building3dDemoControls';
-import { buildInitialBuilding3dOptions } from './building3dDemo.constants';
 
-const MOUNT_SNIPPET = 'SurfySdk.mountBuilding3d({ buildingId })';
-const REACT_SNIPPET = '<SurfyBuildingLayout3dReact buildingId={…} />';
+const MOUNT_SNIPPET = 'SurfySdk.mountFloor3d({ floorId })';
+const REACT_SNIPPET = '<SurfyFloorLayout3dReact floorId={…} />';
 
-interface Building3dDemoPanelProps {
+interface Floor3dDemoPanelProps {
   readonly active: boolean;
   readonly tenant: string;
-  readonly buildingId: number | undefined;
-  readonly buildingFloors: readonly DemoFloor[];
+  readonly floorId: number | undefined;
+  /** Optional catalog floor for label in controls; id must match floorId. */
+  readonly floor?: DemoFloor;
   readonly title: string;
   readonly description: string;
 }
 
 /**
- * Building 3D demo — API JS (`mountBuilding3d`) or Surfy React Web.
+ * Floor 3D demo — API JS (`mountFloor3d`) or Surfy React Web.
+ * Shares Layout3dDemoControls with building-3d (`scope="floor"`).
  */
-export function Building3dDemoPanel({
+export function Floor3dDemoPanel({
   active,
   tenant,
-  buildingId,
-  buildingFloors,
+  floorId,
+  floor,
   title,
   description,
-}: Building3dDemoPanelProps) {
+}: Floor3dDemoPanelProps) {
   const [surfaceMode, setSurfaceMode] = useState<DemoSurfaceMode>('api-js');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const layoutRef = useRef<SurfyLayout | null>(null);
-  const registered = SurfySdk.isKindRegistered('building-3d');
+  const registered = SurfySdk.isKindRegistered('floor-3d');
 
-  const chrome = useLayoutDemoChrome({
-    layoutRef,
-    active: active && surfaceMode === 'api-js',
-    entityId: buildingId,
-  });
+  const floorsForControls = useMemo((): readonly DemoFloor[] => {
+    if (floorId === undefined) return [];
+    if (floor && floor.id === floorId) return [floor];
+    return [{ id: floorId, name: `Floor ${floorId}`, level: 0 }];
+  }, [floor, floorId]);
+
   const {
     themeId,
     pushApiLine,
@@ -71,7 +74,11 @@ export function Building3dDemoPanel({
     clearColors,
     toggleRandomBlink,
     apiLog,
-  } = chrome;
+  } = useLayoutDemoChrome({
+    layoutRef,
+    active: active && surfaceMode === 'api-js',
+    entityId: floorId,
+  });
 
   const apply3dOptions = useCallback(
     (patch: SurfyLayout3dOptions) => {
@@ -82,6 +89,9 @@ export function Building3dDemoPanel({
   );
 
   const updateRoom = useCallback((roomId: number, options: SurfyRoomUpdateOptions) => {
+    if (!isRenderedDemoRoom(layoutRef.current, roomId)) {
+      return;
+    }
     layoutRef.current?.updateRoom(roomId, options);
   }, []);
 
@@ -109,19 +119,19 @@ export function Building3dDemoPanel({
   );
 
   useEffect(() => {
-    if (!active || surfaceMode !== 'api-js' || buildingId === undefined || !registered) return;
+    if (!active || surfaceMode !== 'api-js' || floorId === undefined || !registered) return;
 
     const container = containerRef.current;
     if (!container) return;
 
-    const layout = SurfySdk.mountBuilding3d({
+    const layout = SurfySdk.mountFloor3d({
       container,
       tenant,
       baseUrl: getSurfyDemoBaseUrl(),
-      buildingId,
+      floorId,
       fillParent: true,
       theme: getDemoThemeOptions(themeId),
-      options: buildInitialBuilding3dOptions(buildingFloors.map((floor) => floor.id)),
+      options: buildInitialFloor3dOptions(floorId),
       getAccessToken: () => getDemoProxyBearer(),
       ...createMountListeners(),
     });
@@ -137,8 +147,7 @@ export function Building3dDemoPanel({
     active,
     surfaceMode,
     tenant,
-    buildingId,
-    buildingFloors,
+    floorId,
     themeId,
     registered,
     createMountListeners,
@@ -151,19 +160,19 @@ export function Building3dDemoPanel({
 
   return (
     <LayoutDemoShell
-      testId="demo-section-building-3d"
+      testId="demo-section-floor-3d"
       title={title}
       mountSnippet={surfaceMode === 'api-js' ? MOUNT_SNIPPET : REACT_SNIPPET}
-      entityLabel={buildingId !== undefined ? `buildingId=${buildingId}` : undefined}
+      entityLabel={floorId !== undefined ? `floorId=${floorId}` : undefined}
       description={description}
       registered={registered}
-      hasEntity={buildingId !== undefined}
+      hasEntity={floorId !== undefined}
       mapHostRef={containerRef}
       surfaceMode={surfaceMode}
       onSurfaceModeChange={setSurfaceMode}
       mapChildren={
-        buildingId !== undefined ? (
-          <DemoReactBuildingHost tenant={tenant} buildingId={buildingId} />
+        floorId !== undefined ? (
+          <DemoReactFloorHost kind="floor-3d" tenant={tenant} floorId={floorId} />
         ) : null
       }
       sidebar={
@@ -181,8 +190,9 @@ export function Building3dDemoPanel({
             onFitToView={fitToView}
             onZoomOnRoom={zoomOnRoom}
             extraSidebar={
-              <Building3dDemoControls
-                buildingFloors={buildingFloors}
+              <Layout3dDemoControls
+                scope="floor"
+                floors={floorsForControls}
                 demoRoomId={demoRoomId}
                 onApplyOptions={apply3dOptions}
                 onUpdateRoom={updateRoom}
@@ -191,7 +201,7 @@ export function Building3dDemoPanel({
               />
             }
           />
-          <ApiSnippetPanel value={buildApiSnippetBlock('building-3d', apiLog)} />
+          <ApiSnippetPanel value={buildApiSnippetBlock('floor-3d', apiLog)} />
         </>
       }
     />

@@ -531,6 +531,22 @@ button:disabled {
   position: relative;
 }
 
+.demo-surface-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+
+.demo-surface-toggle__btn {
+  font-size: 0.85rem;
+}
+
+.demo-surface-toggle__btn--active {
+  border-color: var(--demo-primary, #1976d2);
+  background: color-mix(in srgb, var(--demo-primary, #1976d2) 12%, transparent);
+}
+
 .layout-host > * {
   display: block;
   width: 100% !important;

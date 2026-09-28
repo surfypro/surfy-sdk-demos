@@ -31,8 +31,25 @@ export function snippetMountBuilding3d(withFloorIds = false): string {
   ].join('\n');
 }
 
-export function snippetMountHeader(kind: 'floor-2d' | 'building-3d'): string {
-  return kind === 'building-3d' ? snippetMountBuilding3d() : snippetMountFloor2d();
+export function snippetMountFloor3d(): string {
+  return [
+    "import { SurfySdk } from '@surfy/surfy-sdk';",
+    '',
+    'const layout = SurfySdk.mountFloor3d({',
+    `  container: '#map',`,
+    '  tenant,',
+    '  baseUrl,',
+    '  floorId,',
+    '  getAccessToken,',
+    '});',
+    '',
+  ].join('\n');
+}
+
+export function snippetMountHeader(kind: 'floor-2d' | 'building-3d' | 'floor-3d'): string {
+  if (kind === 'building-3d') return snippetMountBuilding3d();
+  if (kind === 'floor-3d') return snippetMountFloor3d();
+  return snippetMountFloor2d();
 }
 
 export function snippetSetRoomColors(roomId: number, color: string): string {
@@ -67,7 +84,10 @@ export function snippetUpdateRoom(roomId: number, optionsLiteral: string): strin
   return `layout.updateRoom(${roomId}, ${optionsLiteral});`;
 }
 
-export function buildApiSnippetBlock(kind: 'floor-2d' | 'building-3d', lines: readonly string[]): string {
+export function buildApiSnippetBlock(
+  kind: 'floor-2d' | 'building-3d' | 'floor-3d',
+  lines: readonly string[],
+): string {
   const body = lines.length > 0 ? lines.join('\n') : '// Cliquez Color / Blink / Clear pour voir l’appel';
   return `${snippetMountHeader(kind)}${body}`;
 }

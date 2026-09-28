@@ -9,7 +9,7 @@ function createFilter(operator, column, value) {
 //#endregion
 //#region src/surfy-sdk/constants.ts
 /** Published SDK semver — bump on public API changes. */
-var SURFY_SDK_VERSION = "0.2.0";
+var SURFY_SDK_VERSION = "0.3.0";
 //#endregion
 //#region src/surfy-sdk/client/surfyHttp.helper.ts
 function normalizeSurfyBaseUrl(baseUrl) {

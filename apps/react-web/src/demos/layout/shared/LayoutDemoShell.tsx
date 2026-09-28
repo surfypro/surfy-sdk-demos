@@ -1,6 +1,8 @@
 import type { ReactNode, RefObject } from 'react';
 
 import { useDemoI18n } from '../../../i18n/DemoI18nProvider';
+import type { DemoSurfaceMode } from './demoSurfaceMode';
+import { DemoSurfaceModeToggle } from './DemoSurfaceModeToggle';
 
 interface LayoutDemoShellProps {
   readonly testId: string;
@@ -11,7 +13,10 @@ interface LayoutDemoShellProps {
   readonly registered: boolean;
   readonly hasEntity: boolean;
   readonly sidebar: ReactNode;
-  readonly mapHostRef: RefObject<HTMLDivElement | null>;
+  readonly mapHostRef?: RefObject<HTMLDivElement | null>;
+  readonly mapChildren?: ReactNode;
+  readonly surfaceMode: DemoSurfaceMode;
+  readonly onSurfaceModeChange: (mode: DemoSurfaceMode) => void;
 }
 
 /** Shared section chrome — header, empty states, sidebar + map host. */
@@ -25,6 +30,9 @@ export function LayoutDemoShell({
   hasEntity,
   sidebar,
   mapHostRef,
+  mapChildren,
+  surfaceMode,
+  onSurfaceModeChange,
 }: LayoutDemoShellProps) {
   const { t } = useDemoI18n();
 
@@ -32,6 +40,7 @@ export function LayoutDemoShell({
     <section className="demo-section" data-testid={testId}>
       <header className="demo-section__header">
         <h2>{title}</h2>
+        <DemoSurfaceModeToggle value={surfaceMode} onChange={onSurfaceModeChange} />
         <p className="demo-section__tag">
           <code>{mountSnippet}</code>
           {entityLabel !== undefined ? (
@@ -58,7 +67,13 @@ export function LayoutDemoShell({
             {sidebar}
           </aside>
           <div className="demo-section__map">
-            <div ref={mapHostRef} className="layout-host" data-testid="layout-host" />
+            {surfaceMode === 'api-js' ? (
+              <div ref={mapHostRef} className="layout-host" data-testid="layout-host" />
+            ) : (
+              <div className="layout-host layout-host--react" data-testid="layout-host-react">
+                {mapChildren}
+              </div>
+            )}
           </div>
         </div>
       )}

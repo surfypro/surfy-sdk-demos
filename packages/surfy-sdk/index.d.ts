@@ -86,7 +86,7 @@ export interface SurfyRoomUpdateOptions {
 	readonly showLabel?: boolean;
 }
 /** Layout kind on {@link SurfyLayout} handles. */
-export type SurfyLayoutKind = "floor-2d" | "building-3d";
+export type SurfyLayoutKind = "floor-2d" | "building-3d" | "floor-3d";
 export interface SurfyLayoutMountBaseOptions {
 	/** Host node or CSS selector where the layout is mounted. */
 	readonly container: HTMLElement | string;
@@ -124,6 +124,13 @@ export interface SurfyBuilding3dMountOptions extends SurfyLayoutMountBaseOptions
 	readonly floorIds?: readonly number[];
 	readonly options?: SurfyLayout3dOptions;
 	readonly onReady?: (detail: SurfyBuildingLayout3dReadyDetail) => void;
+}
+/** Options for {@link SurfySdk.mountFloor3d} — single floor locked in 3D (building deduced). */
+export interface SurfyFloor3dMountOptions extends SurfyLayoutMountBaseOptions {
+	readonly floorId: number;
+	/** 3D display knobs; `selectedFloorIds` is always forced to `[floorId]`. */
+	readonly options?: SurfyLayout3dOptions;
+	readonly onReady?: (detail: SurfyFloorLayout3dReadyDetail) => void;
 }
 /** Shared imperative API for layout Web Components (2D + building 3D). */
 export interface SurfyLayoutElement extends HTMLElement {
@@ -225,6 +232,9 @@ export interface SurfyFloorLayout2dReadyDetail {
 export interface SurfyBuildingLayout3dReadyDetail {
 	readonly buildingId: number;
 }
+export interface SurfyFloorLayout3dReadyDetail {
+	readonly floorId: number;
+}
 export interface SurfyRoomSelectedDetail {
 	readonly roomId: number;
 	readonly name: string;
@@ -238,7 +248,8 @@ export interface SurfyBuildingLayout3dElement extends SurfyLayoutElement {
 	 */
 	setFetchFloorIds(floorIds?: readonly number[] | null): void;
 }
-export type SurfyLayoutReadyDetail = SurfyFloorLayout2dReadyDetail | SurfyBuildingLayout3dReadyDetail;
+export type SurfyFloorLayout3dElement = SurfyLayoutElement;
+export type SurfyLayoutReadyDetail = SurfyFloorLayout2dReadyDetail | SurfyBuildingLayout3dReadyDetail | SurfyFloorLayout3dReadyDetail;
 /** High-level layout handle — preferred public API over raw Web Components. */
 export interface SurfyLayout {
 	readonly kind: SurfyLayoutKind;
@@ -3263,11 +3274,13 @@ export declare class SurfyClient {
 	fetchEntities<T>(queryNode: SurfyQueryNode, signal?: AbortSignal): Promise<T[]>;
 }
 /** Published SDK semver — bump on public API changes. */
-export declare const SURFY_SDK_VERSION = "0.2.0";
+export declare const SURFY_SDK_VERSION = "0.3.0";
 /** 2D floor layout Web Component. */
 export declare const SURFY_FLOOR_LAYOUT_2D_TAG = "surfy-floor-layout-2d";
 /** 3D building layout Web Component — CubyV2 (multi-floor or single-floor focus). */
 export declare const SURFY_BUILDING_LAYOUT_3D_TAG = "surfy-building-layout-3d";
+/** 3D single-floor layout Web Component — CubyV2 locked to one floor. */
+export declare const SURFY_FLOOR_LAYOUT_3D_TAG = "surfy-floor-layout-3d";
 /**
  * Three-surface semantic parity matrix (WC ↔ API JS ↔ Surfy React Web).
  * React names are the frozen target contract (hooks/components land in M2).
@@ -3284,7 +3297,7 @@ export interface SurfySemanticParityRow {
 }
 export declare const SURFY_SEMANTIC_PARITY_MATRIX: readonly SurfySemanticParityRow[];
 export declare function listSemanticParityCapabilities(): readonly SurfySemanticCapability[];
-/** Registers layout Web Components (`surfy-floor-layout-2d`, `surfy-building-layout-3d`). */
+/** Registers layout Web Components (`surfy-floor-layout-2d`, `surfy-building-layout-3d`, `surfy-floor-layout-3d`). */
 export declare function registerSurfyLayoutElements(): void;
 /** Global Surfy SDK facade — runtime value from the ESM bundle. */
 export declare const SurfySdk: {
@@ -3293,6 +3306,7 @@ export declare const SurfySdk: {
 	isKindRegistered(kind: SurfyLayoutKind): boolean;
 	mountFloor2d(options: SurfyFloor2dMountOptions): SurfyLayout;
 	mountBuilding3d(options: SurfyBuilding3dMountOptions): SurfyLayout;
+	mountFloor3d(options: SurfyFloor3dMountOptions): SurfyLayout;
 };
 
 export {};
