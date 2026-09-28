@@ -39,11 +39,10 @@ jobs:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
     needs: quality
-    # Secrets are not exposed on PRs from forks — skip E2E there.
+    # secrets.* is illegal in job-level `if` — fork check only here; secret gated in steps.
     if: >-
-      secrets.SURFY_CONNECTION_STRING != '' &&
-      (github.event_name != 'pull_request' ||
-        github.event.pull_request.head.repo.full_name == github.repository)
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     timeout-minutes: 25
     env:
       CI: 'true'
@@ -52,28 +51,44 @@ jobs:
       SURFY_TLS_INSECURE: ${{ vars.SURFY_TLS_INSECURE || '1' }}
       DEMO_RATE_LIMIT_DISABLED: '1'
     steps:
-      - uses: actions/checkout@v4
+      - name: Guard — SURFY_CONNECTION_STRING required for E2E
+        id: guard
+        run: |
+          if [ -z "${SURFY_CONNECTION_STRING}" ]; then
+            echo "run_e2e=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SURFY_CONNECTION_STRING not set — skipping E2E"
+          else
+            echo "run_e2e=true" >> "$GITHUB_OUTPUT"
+          fi
 
-      - uses: pnpm/action-setup@v4
+      - if: steps.guard.outputs.run_e2e == 'true'
+        uses: actions/checkout@v4
+
+      - if: steps.guard.outputs.run_e2e == 'true'
+        uses: pnpm/action-setup@v4
         with:
           version: 11.10.0
 
-      - uses: actions/setup-node@v4
+      - if: steps.guard.outputs.run_e2e == 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: pnpm
 
       - name: Install dependencies
+        if: steps.guard.outputs.run_e2e == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright Chromium
+        if: steps.guard.outputs.run_e2e == 'true'
         run: pnpm --filter react-web exec playwright install --with-deps chromium
 
       - name: Run E2E (SDK manifest coverage)
+        if: steps.guard.outputs.run_e2e == 'true'
         run: pnpm test:e2e
 
       - name: Upload Playwright report
-        if: failure()
+        if: failure() && steps.guard.outputs.run_e2e == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report

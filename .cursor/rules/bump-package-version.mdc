@@ -1,0 +1,22 @@
+---
+description: Bump root package.json version on every delivered change set
+alwaysApply: true
+---
+
+# Version bump — surfy-sdk-demos
+
+Whenever you deliver a change set that modifies project files (code, CI, docs that ship with the repo, rules, scripts), **bump the root [`package.json`](../../package.json) `version`** in the same change.
+
+## How
+
+- Semver on the root package only (`surfy-sdk-demos`).
+- Default: **patch** (`1.0.1` → `1.0.2`) for fixes, CI, docs, rules, small tweaks.
+- Use **minor** for user-visible demo features / new sections.
+- Use **major** only for breaking changes to how demos are run or published (rare).
+- Do **not** bump solely for chat-only / no-file-change answers.
+- Do **not** bump `packages/surfy-sdk` version here — that comes from SDK sync (`SDK_VERSION`).
+
+## Checklist before « done »
+
+- [ ] Root `package.json` `version` updated if files changed
+- [ ] Mention the new version briefly when summarizing the change

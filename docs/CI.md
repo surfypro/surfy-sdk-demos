@@ -42,7 +42,7 @@ Le badge reflète l’état du dernier run sur la branche par défaut (`main`).
 - Require status checks : **Quality** et **E2E (Playwright)**
 - Require PR before merging
 
-Les PR depuis un **fork** n’ont pas accès aux secrets : seul **Quality** tourne (E2E ignoré). Les PR internes au repo exécutent les deux jobs.
+Les PR depuis un **fork** n’ont pas accès aux secrets : le job E2E est **skipped** via `if` (comparaison fork/repo uniquement — **ne pas** utiliser `secrets.*` dans un `if` de job, GitHub le refuse). Sans secret configuré sur le repo, le job E2E démarre puis **skip** les steps (notice). Les PR internes avec secret exécutent Quality + E2E.
 
 ## PRs depuis l’équipe
 
