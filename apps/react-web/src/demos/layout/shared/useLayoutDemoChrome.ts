@@ -1,12 +1,17 @@
-import { useCallback, useEffect, useState, type RefObject } from 'react';
-import type { SurfyLayout, SurfySdkErrorDetail } from '@surfy/surfy-sdk';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import type { IEmbedLayoutViewData, SurfyLayout, SurfySdkErrorDetail } from '@surfy/surfy-sdk';
+import { fetchFloorLayoutData } from '@surfy/surfy-sdk';
 
 import {
+  snippetAddPin,
+  snippetClearPins,
   snippetClearRoomColors,
   snippetSetRoomColors,
 } from '../../../demoApiSnippets';
 import { isRenderedDemoRoom, pickRandomItem, waitForDemoRoomId } from '../../../demoLayoutElement';
+import { getDemoProxyBearer } from '../../../demoSession';
 import { getDemoThemeOptions } from '../../../demoThemes';
+import { getSurfyDemoBaseUrl } from '../../../surfyEnv';
 import { useDemoTheme } from '../../../useDemoTheme';
 import {
   API_LOG_MAX_LINES,
@@ -14,19 +19,33 @@ import {
   RANDOM_BLINK_INTERVAL_MS,
   RANDOM_ROOM_COLORS,
 } from './layoutDemo.constants';
+import { pickRandomPlanPin, pickRandomRoomPin, type LayoutPinSpec } from './demoPinHelpers';
 
 export type LayoutDemoBlink = { readonly roomId: number; readonly color: string };
 
+function pinSpecLiteral(spec: LayoutPinSpec): string {
+  const parts = [
+    `x: ${Number(spec.x.toFixed(2))}`,
+    `y: ${Number(spec.y.toFixed(2))}`,
+  ];
+  if (spec.floorId !== undefined) parts.push(`floorId: ${spec.floorId}`);
+  if (spec.label !== undefined) parts.push(`label: ${JSON.stringify(spec.label)}`);
+  return `{ ${parts.join(', ')} }`;
+}
+
 /**
- * Shared chrome for floor-2d / building-3d / floor-3d demos: events, colors, blink, snippets, theme.
- * Mount stays in each panel. Zoom / color actions target rooms on the current layout only.
+ * Shared chrome for floor-2d / building-3d / floor-3d demos: events, colors, blink, pins, snippets, theme.
+ * Mount stays in each panel. Zoom / color / pin actions target the current layout.
  */
 export function useLayoutDemoChrome(params: {
   readonly layoutRef: RefObject<SurfyLayout | null>;
   readonly active: boolean;
   readonly entityId: number | undefined;
+  readonly tenant: string;
+  /** Floor used to resolve layout coords for pins (required for building-3d). */
+  readonly pinFloorId: number | undefined;
 }) {
-  const { layoutRef, active, entityId } = params;
+  const { layoutRef, active, entityId, tenant, pinFloorId } = params;
   const { themeId } = useDemoTheme();
   const [lastEvent, setLastEvent] = useState('none');
   const [demoRoomId, setDemoRoomId] = useState<number | undefined>(undefined);
@@ -34,6 +53,11 @@ export function useLayoutDemoChrome(params: {
   const [randomBlinkOn, setRandomBlinkOn] = useState(false);
   const [lastBlink, setLastBlink] = useState<LayoutDemoBlink | null>(null);
   const [apiLog, setApiLog] = useState<string[]>([]);
+  const [pinBusy, setPinBusy] = useState(false);
+  const layoutDataCacheRef = useRef<{
+    floorId: number;
+    data: IEmbedLayoutViewData;
+  } | null>(null);
 
   const pushApiLine = useCallback((line: string) => {
     setApiLog((prev) => [...prev, line].slice(-API_LOG_MAX_LINES));
@@ -42,7 +66,8 @@ export function useLayoutDemoChrome(params: {
   useEffect(() => {
     setDemoRoomId(undefined);
     setLastBlink(null);
-  }, [entityId]);
+    layoutDataCacheRef.current = null;
+  }, [entityId, pinFloorId]);
 
   useEffect(() => {
     layoutRef.current?.setFillParent(fillParent);
@@ -105,6 +130,70 @@ export function useLayoutDemoChrome(params: {
     });
   }, [layoutRef, pushApiLine]);
 
+  const loadPinLayoutData = useCallback(async (): Promise<IEmbedLayoutViewData | null> => {
+    if (pinFloorId === undefined) return null;
+    const cached = layoutDataCacheRef.current;
+    if (cached && cached.floorId === pinFloorId) {
+      return cached.data;
+    }
+    const data = await fetchFloorLayoutData({
+      baseUrl: getSurfyDemoBaseUrl(),
+      tenant,
+      floorId: pinFloorId,
+      getAccessToken: () => getDemoProxyBearer(),
+    });
+    layoutDataCacheRef.current = { floorId: pinFloorId, data };
+    return data;
+  }, [pinFloorId, tenant]);
+
+  const pinOnRandomRoom = useCallback(() => {
+    if (pinFloorId === undefined || pinBusy) return;
+    const layout = layoutRef.current;
+    if (!layout) return;
+    setPinBusy(true);
+    void loadPinLayoutData()
+      .then((data) => {
+        if (!data || !layoutRef.current) return;
+        const spec = pickRandomRoomPin(data, layout.getRenderedRoomIds(), pinFloorId);
+        if (!spec) return;
+        layoutRef.current.addPin(spec);
+        pushApiLine(snippetAddPin(pinSpecLiteral(spec)));
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : 'pin failed';
+        setLastEvent(`surfy:error PIN ${message}`);
+      })
+      .finally(() => {
+        setPinBusy(false);
+      });
+  }, [pinFloorId, pinBusy, layoutRef, loadPinLayoutData, pushApiLine]);
+
+  const pinOnRandomPlan = useCallback(() => {
+    if (pinFloorId === undefined || pinBusy) return;
+    if (!layoutRef.current) return;
+    setPinBusy(true);
+    void loadPinLayoutData()
+      .then((data) => {
+        if (!data || !layoutRef.current) return;
+        const spec = pickRandomPlanPin(data, pinFloorId);
+        if (!spec) return;
+        layoutRef.current.addPin(spec);
+        pushApiLine(snippetAddPin(pinSpecLiteral(spec)));
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : 'pin failed';
+        setLastEvent(`surfy:error PIN ${message}`);
+      })
+      .finally(() => {
+        setPinBusy(false);
+      });
+  }, [pinFloorId, pinBusy, layoutRef, loadPinLayoutData, pushApiLine]);
+
+  const clearPins = useCallback(() => {
+    layoutRef.current?.clearPins();
+    pushApiLine(snippetClearPins());
+  }, [layoutRef, pushApiLine]);
+
   const createMountListeners = useCallback(
     () => ({
       onReady: () => {
@@ -141,6 +230,8 @@ export function useLayoutDemoChrome(params: {
     setDemoRoomId(undefined);
     setApiLog([]);
     setLastEvent('none');
+    setPinBusy(false);
+    layoutDataCacheRef.current = null;
   }, []);
 
   return {
@@ -156,6 +247,11 @@ export function useLayoutDemoChrome(params: {
     colorDemoRoom,
     clearColors,
     toggleRandomBlink,
+    pinsEnabled: pinFloorId !== undefined,
+    pinBusy,
+    pinOnRandomRoom,
+    pinOnRandomPlan,
+    clearPins,
     createMountListeners,
     resetOnUnmount,
   };

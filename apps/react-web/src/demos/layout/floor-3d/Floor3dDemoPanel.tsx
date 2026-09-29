@@ -73,11 +73,18 @@ export function Floor3dDemoPanel({
     colorDemoRoom,
     clearColors,
     toggleRandomBlink,
+    pinsEnabled,
+    pinBusy,
+    pinOnRandomRoom,
+    pinOnRandomPlan,
+    clearPins,
     apiLog,
   } = useLayoutDemoChrome({
     layoutRef,
     active: active && surfaceMode === 'api-js',
     entityId: floorId,
+    tenant,
+    pinFloorId: floorId,
   });
 
   const apply3dOptions = useCallback(
@@ -189,6 +196,11 @@ export function Floor3dDemoPanel({
             onFillParentChange={setFillParent}
             onFitToView={fitToView}
             onZoomOnRoom={zoomOnRoom}
+            pinsEnabled={pinsEnabled}
+            pinBusy={pinBusy}
+            onPinRandomRoom={pinOnRandomRoom}
+            onPinRandomPlan={pinOnRandomPlan}
+            onClearPins={clearPins}
             extraSidebar={
               <Layout3dDemoControls
                 scope="floor"

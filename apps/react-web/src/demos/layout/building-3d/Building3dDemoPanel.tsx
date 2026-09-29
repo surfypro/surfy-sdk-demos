@@ -55,6 +55,8 @@ export function Building3dDemoPanel({
     layoutRef,
     active: active && surfaceMode === 'api-js',
     entityId: buildingId,
+    tenant,
+    pinFloorId: buildingFloors[0]?.id,
   });
   const {
     themeId,
@@ -70,6 +72,11 @@ export function Building3dDemoPanel({
     colorDemoRoom,
     clearColors,
     toggleRandomBlink,
+    pinsEnabled,
+    pinBusy,
+    pinOnRandomRoom,
+    pinOnRandomPlan,
+    clearPins,
     apiLog,
   } = chrome;
 
@@ -180,6 +187,11 @@ export function Building3dDemoPanel({
             onFillParentChange={setFillParent}
             onFitToView={fitToView}
             onZoomOnRoom={zoomOnRoom}
+            pinsEnabled={pinsEnabled}
+            pinBusy={pinBusy}
+            onPinRandomRoom={pinOnRandomRoom}
+            onPinRandomPlan={pinOnRandomPlan}
+            onClearPins={clearPins}
             extraSidebar={
               <Building3dDemoControls
                 buildingFloors={buildingFloors}

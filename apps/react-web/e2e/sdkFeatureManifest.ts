@@ -90,6 +90,16 @@ export const SDK_FEATURE_MANIFEST: readonly SdkFeatureEntry[] = [
     coveredBy: 'layout-view.spec.ts',
   },
   {
+    id: 'SurfyLayout.addPin',
+    category: 'layout',
+    description: 'Ajoute un pin layout (x,y) ou GPS sur le plan',
+  },
+  {
+    id: 'SurfyLayout.clearPins',
+    category: 'layout',
+    description: 'Efface tous les pins du layout',
+  },
+  {
     id: 'SurfyLayout.getRenderedRoomIds',
     category: 'layout',
     description: 'Liste les roomId rendus dans le DOM embed',

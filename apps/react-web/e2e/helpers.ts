@@ -13,6 +13,8 @@ export const DEFAULT_ROOM_FILL = '#e8e8e8';
 export const DEFAULT_DEMO_URL = '/api/react-web/floor-2d';
 export const BUILDING_3D_DEMO_URL = '/api/react-web/building-3d';
 export const FLOOR_3D_DEMO_URL = '/api/react-web/floor-3d';
+export const PLATFORM_3D_DEMO_URL = '/api/react-web/platform-3d';
+export const CAMPUS_3D_DEMO_URL = '/api/react-web/campus-3d';
 export const DATA_API_DEMO_URL = '/api/react-web/data-api';
 
 type SurfyLayoutElement = HTMLElement & {

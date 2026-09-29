@@ -83,11 +83,11 @@ export function resolveSurfyProxyUpstreamPath(requestPath: string): string {
     }
     return rest;
   }
-  if (path.startsWith('/api/v1/')) {
+  if (path.startsWith('/api/v1/') || path.startsWith('/api/rpc')) {
     return path;
   }
   throw new SurfyConfigError(
-    `Unable to resolve Surfy upstream path from "${path}" (expected /proxy/api/v1/...)`,
+    `Unable to resolve Surfy upstream path from "${path}" (expected /proxy/api/v1/... or /proxy/api/rpc...)`,
   );
 }
 

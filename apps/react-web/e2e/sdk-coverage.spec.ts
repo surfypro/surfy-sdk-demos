@@ -107,6 +107,48 @@ test.describe('SDK feature coverage (manifest)', () => {
           await expect(page.getByTestId('demo-zoom-on-room')).toBeEnabled({ timeout: 30_000 });
           break;
         }
+        case 'SurfyLayout.addPin': {
+          await page.goto(DEFAULT_DEMO_URL);
+          await waitForLayoutDemoActions(page);
+          await page.getByTestId('demo-pin-random-room').click();
+          await expect(page.getByTestId('demo-api-snippet')).toContainText('layout.addPin', {
+            timeout: 30_000,
+          });
+          await expect
+            .poll(async () => {
+              return page.locator('surfy-floor-layout-2d').evaluate((element) => {
+                return element.shadowRoot?.querySelectorAll('[data-pin-id]').length ?? 0;
+              });
+            })
+            .toBeGreaterThan(0);
+          await page.getByTestId('demo-pin-random-plan').click();
+          await expect
+            .poll(async () => {
+              return page.locator('surfy-floor-layout-2d').evaluate((element) => {
+                return element.shadowRoot?.querySelectorAll('[data-pin-id]').length ?? 0;
+              });
+            })
+            .toBeGreaterThan(1);
+          break;
+        }
+        case 'SurfyLayout.clearPins': {
+          await page.goto(DEFAULT_DEMO_URL);
+          await waitForLayoutDemoActions(page);
+          await page.getByTestId('demo-pin-random-room').click();
+          await expect(page.getByTestId('demo-api-snippet')).toContainText('layout.addPin', {
+            timeout: 30_000,
+          });
+          await page.getByTestId('demo-clear-pins').click();
+          await expect(page.getByTestId('demo-api-snippet')).toContainText('layout.clearPins()');
+          await expect
+            .poll(async () => {
+              return page.locator('surfy-floor-layout-2d').evaluate((element) => {
+                return element.shadowRoot?.querySelectorAll('[data-pin-id]').length ?? 0;
+              });
+            })
+            .toBe(0);
+          break;
+        }
         case 'SurfyLayout.destroy': {
           await page.goto(DEFAULT_DEMO_URL);
           await waitForLayoutDemoActions(page);

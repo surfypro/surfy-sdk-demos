@@ -230,6 +230,6 @@ app.use(SURFY_DEMO_PROXY_PATH_PREFIX, requireSession, rateLimit, async (req: Req
 app.listen(port, () => {
   console.log(`Surfy demo server listening on http://localhost:${port}`);
   console.log(
-    `  session: GET /api/session  |  proxy: ${SURFY_DEMO_PROXY_PATH_PREFIX}/api/v1/* (Bearer injected)`,
+    `  session: GET /api/session  |  proxy: ${SURFY_DEMO_PROXY_PATH_PREFIX}/api/v1/* + /api/rpc (Bearer injected)`,
   );
 });

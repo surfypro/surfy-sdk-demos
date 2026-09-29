@@ -5,6 +5,7 @@ import { ClearColorsAction } from '../actions/ClearColorsAction';
 import { ColorRoomAction } from '../actions/ColorRoomAction';
 import { FillParentToggle } from '../actions/FillParentToggle';
 import { FitToViewAction } from '../actions/FitToViewAction';
+import { PinActions } from '../actions/PinActions';
 import { RandomBlinkAction } from '../actions/RandomBlinkAction';
 import { ZoomOnRoomAction } from '../actions/ZoomOnRoomAction';
 import type { LayoutDemoBlink } from './useLayoutDemoChrome';
@@ -21,13 +22,18 @@ interface LayoutDemoCommonActionsProps {
   readonly onFillParentChange: (value: boolean) => void;
   readonly onFitToView?: () => void;
   readonly onZoomOnRoom?: (roomId: number) => void;
+  readonly pinsEnabled?: boolean;
+  readonly pinBusy?: boolean;
+  readonly onPinRandomRoom?: () => void;
+  readonly onPinRandomPlan?: () => void;
+  readonly onClearPins?: () => void;
   /** Extra actions after Clear / zoom (e.g. building-only controls). */
   readonly extraActions?: ReactNode;
   /** Extra sidebar blocks after fill-parent (e.g. Building3dDemoControls). */
   readonly extraSidebar?: ReactNode;
 }
 
-/** Color / blink / clear / zoom / fill-parent — same for floor-2d and building-3d. */
+/** Color / blink / clear / zoom / pins / fill-parent — same for floor-2d and building-3d. */
 export function LayoutDemoCommonActions({
   lastEvent,
   demoRoomId,
@@ -40,6 +46,11 @@ export function LayoutDemoCommonActions({
   onFillParentChange,
   onFitToView,
   onZoomOnRoom,
+  pinsEnabled = false,
+  pinBusy = false,
+  onPinRandomRoom,
+  onPinRandomPlan,
+  onClearPins,
   extraActions,
   extraSidebar,
 }: LayoutDemoCommonActionsProps) {
@@ -60,6 +71,14 @@ export function LayoutDemoCommonActions({
         <ClearColorsAction onClear={onClearColors} />
         {onFitToView ? <FitToViewAction onFit={onFitToView} /> : null}
         {onZoomOnRoom ? <ZoomOnRoomAction demoRoomId={demoRoomId} onZoom={onZoomOnRoom} /> : null}
+        {pinsEnabled && onPinRandomRoom && onPinRandomPlan && onClearPins ? (
+          <PinActions
+            disabled={pinBusy}
+            onPinRandomRoom={onPinRandomRoom}
+            onPinRandomPlan={onPinRandomPlan}
+            onClearPins={onClearPins}
+          />
+        ) : null}
         {extraActions}
       </div>
       {lastBlink ? (

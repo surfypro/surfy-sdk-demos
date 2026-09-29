@@ -74,6 +74,28 @@ export declare function SurfyBuildingLayout3dReact(props: ISurfyBuildingLayout3d
 export declare function SurfyFloorLayout3dReact(props: ISurfyFloorLayout3dReactProps): ReactElement;
 export declare function SimpleFloorPlanRoot(props: ISimpleFloorPlanRootProps): ReactElement;
 export declare function SimpleBuildingPlanRoot(props: ISimpleBuildingPlanRootProps): ReactElement;
+/** Vue plateforme — MapLibre + Cuby (WI-501). */
+export interface ISurfyPlatformView3dReactProps {
+	readonly tenant: string;
+	readonly clientId?: string;
+	readonly baseUrl: string;
+	readonly getAccessToken: () => Promise<string>;
+	readonly className?: string;
+	readonly style?: CSSProperties;
+	readonly width?: number;
+	readonly height?: number;
+	readonly onReady?: () => void;
+	readonly onBuildingChange?: (buildingId: number) => void;
+	readonly onFloorChange?: (floorId: number) => void;
+	readonly children?: ReactNode;
+	readonly [key: string]: unknown;
+}
+/** Vue campus — same as platform + campusId. */
+export interface ISurfyCampusView3dReactProps extends ISurfyPlatformView3dReactProps {
+	readonly campusId: number;
+}
+export declare function SurfyPlatformView3dReact(props: ISurfyPlatformView3dReactProps): ReactElement;
+export declare function SurfyCampusView3dReact(props: ISurfyCampusView3dReactProps): ReactElement;
 export declare function useSurfySdkStore(): SurfySdkJotaiStore;
 export declare function useSurfySdkStoreOptional(): SurfySdkJotaiStore | null;
 export declare function useRoom(roomId: number): unknown;
@@ -81,5 +103,25 @@ export declare function useRoomValue(roomId: number): unknown;
 export declare function useRooms(workCanvasId: string): unknown;
 export declare function useSetRoom(): (roomId: number, room: unknown) => void;
 export declare function setRoomInSurfySdkStore(store: SurfySdkJotaiStore, roomId: number, room: unknown): void;
+export declare function useBuildings(): readonly unknown[];
+export declare function useFloors(): readonly unknown[];
+export declare function useSpaces(): readonly unknown[];
+export declare function useFurniture(): readonly unknown[];
+export declare function useCurrentZoom(): unknown;
+export declare function useSetCurrentZoom(): (update: unknown) => void;
+export declare function useSpaceColors(): Readonly<Record<number, string>>;
+export declare function useTypologieColors(): Readonly<Record<number, string>>;
+export declare function useEffectiveSpaceColor(spaceId: number): string | undefined;
+export declare function useSetSpaceColor(): (spaceId: number, color: string) => void;
+export declare function useGeoMarker(): unknown;
+export declare function useSelectedSpaceId(): number | null;
+export declare function usePositionFromGeo(options?: unknown): (geo: {
+	readonly lat: number;
+	readonly lng: number;
+	readonly altitude: number;
+}) => unknown;
+export declare class SdkAltitudeFloor0LockedError extends Error {
+	readonly code: "ALTITUDE_FLOOR0_MISSING";
+}
 
 export {};

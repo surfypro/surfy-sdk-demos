@@ -62,4 +62,18 @@ export function demoQueryNodeRoomsByFloor(floorId: number, limit = 500): SurfyQu
   };
 }
 
+export function demoQueryNodeCampuses(limit = 200): SurfyQueryNode<'campus'> {
+  return {
+    name: 'campus',
+    _: ['id', 'name'],
+    order: 'name asc',
+    pagination: { limit },
+  };
+}
+
+export type DemoCampusRow = {
+  readonly id: number;
+  readonly name: string;
+};
+
 export type { IBuilding, IFloor, IRoom };

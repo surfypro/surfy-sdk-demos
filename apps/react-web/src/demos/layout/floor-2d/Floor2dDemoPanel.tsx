@@ -54,11 +54,18 @@ export function Floor2dDemoPanel({
     colorDemoRoom,
     clearColors,
     toggleRandomBlink,
+    pinsEnabled,
+    pinBusy,
+    pinOnRandomRoom,
+    pinOnRandomPlan,
+    clearPins,
     apiLog,
   } = useLayoutDemoChrome({
     layoutRef,
     active: active && surfaceMode === 'api-js',
     entityId: floorId,
+    tenant,
+    pinFloorId: floorId,
   });
 
   const fitToView = useCallback(() => {
@@ -147,6 +154,11 @@ export function Floor2dDemoPanel({
             onFillParentChange={setFillParent}
             onFitToView={fitToView}
             onZoomOnRoom={zoomOnRoom}
+            pinsEnabled={pinsEnabled}
+            pinBusy={pinBusy}
+            onPinRandomRoom={pinOnRandomRoom}
+            onPinRandomPlan={pinOnRandomPlan}
+            onClearPins={clearPins}
           />
           <ApiSnippetPanel value={buildApiSnippetBlock('floor-2d', apiLog)} />
         </>

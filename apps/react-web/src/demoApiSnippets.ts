@@ -80,6 +80,14 @@ export function snippetZoomOnRoom(roomId: number, diameterMeters = 5): string {
   return `layout.zoomOn({ roomId: ${roomId}, diameterMeters: ${diameterMeters} });`;
 }
 
+export function snippetAddPin(specLiteral: string): string {
+  return `layout.addPin(${specLiteral});`;
+}
+
+export function snippetClearPins(): string {
+  return 'layout.clearPins();';
+}
+
 export function snippetUpdateRoom(roomId: number, optionsLiteral: string): string {
   return `layout.updateRoom(${roomId}, ${optionsLiteral});`;
 }

@@ -2,9 +2,10 @@ import type { SurfyLayoutKind } from '@surfy/surfy-sdk';
 import { SurfySdk } from '@surfy/surfy-sdk';
 
 export type DemoLayoutSectionId = SurfyLayoutKind;
-export type DemoSectionId = DemoLayoutSectionId | 'data-api';
+export type DemoPlatformSectionId = 'platform-3d' | 'campus-3d';
+export type DemoSectionId = DemoLayoutSectionId | DemoPlatformSectionId | 'data-api';
 
-export type DemoEntityKind = 'floor' | 'building' | 'none';
+export type DemoEntityKind = 'floor' | 'building' | 'none' | 'platform';
 
 export interface DemoSectionConfig {
   readonly id: DemoSectionId;
@@ -39,6 +40,22 @@ export const DEMO_SECTIONS: readonly DemoSectionConfig[] = [
       'Vue 3D CubyV2 verrouillée sur un seul étage — building déduit, pas de switch interne.',
   },
   {
+    id: 'platform-3d',
+    label: 'Vue plateforme',
+    kind: null,
+    entityKind: 'platform',
+    description:
+      'MapLibre + Cuby multi-bâtiments (tenant) — offline + Position par altitude. React only.',
+  },
+  {
+    id: 'campus-3d',
+    label: 'Vue campus',
+    kind: null,
+    entityKind: 'platform',
+    description:
+      'MapLibre + Cuby scoped par campusId — même stack que la Vue plateforme. React only.',
+  },
+  {
     id: 'data-api',
     label: 'API data',
     kind: null,
@@ -50,7 +67,13 @@ export const DEMO_SECTIONS: readonly DemoSectionConfig[] = [
 export function isLayoutSection(
   section: DemoSectionConfig,
 ): section is DemoSectionConfig & { kind: SurfyLayoutKind; entityKind: 'floor' | 'building' } {
-  return section.kind !== null && section.entityKind !== 'none';
+  return section.kind !== null && (section.entityKind === 'floor' || section.entityKind === 'building');
+}
+
+export function isPlatformSection(
+  section: DemoSectionConfig,
+): section is DemoSectionConfig & { id: DemoPlatformSectionId; entityKind: 'platform' } {
+  return section.entityKind === 'platform' && (section.id === 'platform-3d' || section.id === 'campus-3d');
 }
 
 export function isSectionKindRegistered(kind: SurfyLayoutKind): boolean {

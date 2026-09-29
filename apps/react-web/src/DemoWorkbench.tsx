@@ -4,10 +4,12 @@ import { DataApiDemoPanel } from './demos/data/DataApiDemoPanel';
 import { Building3dDemoPanel } from './demos/layout/building-3d/Building3dDemoPanel';
 import { Floor2dDemoPanel } from './demos/layout/floor-2d/Floor2dDemoPanel';
 import { Floor3dDemoPanel } from './demos/layout/floor-3d/Floor3dDemoPanel';
+import { PlatformCampusDemoPanel } from './demos/platform/PlatformCampusDemoPanel';
 import type { DemoAuthMode } from './demoRoutes';
 import {
   DEMO_SECTIONS,
   isLayoutSection,
+  isPlatformSection,
   type DemoSectionId,
 } from './demoSections';
 import { DemoScopePicker } from './DemoScopePicker';
@@ -86,6 +88,8 @@ export function DemoWorkbench({ embedded = false, authMode, activeSection }: Dem
   const activeDemoSection = DEMO_SECTIONS.find((item) => item.id === activeSection);
   const layoutSection =
     activeDemoSection && isLayoutSection(activeDemoSection) ? activeDemoSection : null;
+  const platformSection =
+    activeDemoSection && isPlatformSection(activeDemoSection) ? activeDemoSection : null;
 
   const onBuildingChange = (nextBuildingId: number) => {
     setBuildingId(nextBuildingId);
@@ -141,6 +145,17 @@ export function DemoWorkbench({ embedded = false, authMode, activeSection }: Dem
       ) : null}
 
       {activeSection === 'data-api' ? <DataApiDemoPanel active /> : null}
+
+      {platformSection ? (
+        <PlatformCampusDemoPanel
+          key={platformSection.id}
+          active
+          mode={platformSection.id === 'campus-3d' ? 'campus' : 'platform'}
+          tenant={catalog?.tenant}
+          title={platformSection.label}
+          description={platformSection.description}
+        />
+      ) : null}
 
       {catalog && layoutSection?.id === 'floor-2d' ? (
         <Floor2dDemoPanel
