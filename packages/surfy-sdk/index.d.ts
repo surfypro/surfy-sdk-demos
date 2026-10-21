@@ -393,9 +393,30 @@ export interface IGridNode {
 }
 export interface IGridNodeOptions {
 	groupSize?: number;
+	/** Pathfinding destination node for an item (furniture centre). */
+	itemId?: number;
+	/** Pathfinding destination node for a workplace centre. */
+	workplaceId?: number;
 }
 export interface IFloorPathfindingGraph {
 	mergedNodes: IGridNode[];
+	/**
+	 * Optional smart-regen fingerprint (WI-500 MB2) — hash of `mergedNodes`.
+	 * Embedded in JSON envelope; no separate schema column.
+	 */
+	contentFingerprint?: string;
+	/** ISO time of last successful generate+persist (WI-500 MB7 source-skip). */
+	generatedAt?: string;
+	/** Snapshot of layout sources used to decide skip without recompute (MB7). */
+	sourceSnapshot?: {
+		readonly roomCount: number;
+		readonly roomPointCount: number;
+		readonly roomPointSegmentCount: number;
+		readonly workplaceCount: number;
+		readonly itemCount: number;
+		readonly maxUpdatedAt: string;
+		readonly mapScaleId: number | null;
+	};
 }
 export interface IEntity {
 	id: number;
@@ -1481,6 +1502,7 @@ export interface IRoomAffectation extends IRoomAffectationRaw {
 export interface IRoomConnectorTypeRaw extends IEntity {
 	id: number;
 	name: string;
+	color?: string;
 	createdAt?: string;
 	updatedAt?: string;
 	externalId?: string;
@@ -1519,6 +1541,37 @@ export interface IRoomPointSegmentTypeRaw extends IEntity {
 export interface IRoomPointSegmentType extends IRoomPointSegmentTypeRaw {
 	roomPointSegments?: IPaginationList<IRoomPointSegment>;
 }
+export interface ISegmentConnectorTypeRaw extends IEntity {
+	id: number;
+	name: string;
+	code: string;
+	color?: string;
+	createdAt?: string;
+	updatedAt?: string;
+	externalId?: string;
+}
+export interface ISegmentConnectorType extends ISegmentConnectorTypeRaw {
+	segmentConnectors?: IPaginationList<ISegmentConnector>;
+}
+export interface ISegmentConnectorRaw extends IEntity {
+	id: number;
+	name?: string;
+	createdAt?: string;
+	updatedAt?: string;
+	externalId?: string;
+	segmentConnectorTypeId: number;
+	roomPointSegmentId: number;
+	userCompanyCreatedById?: number | null;
+	userCompanyUpdatedById?: number | null;
+	companyId?: number | null;
+}
+export interface ISegmentConnector extends ISegmentConnectorRaw {
+	segmentConnectorType?: ISegmentConnectorType;
+	roomPointSegment?: IRoomPointSegment;
+	userCompanyCreatedBy?: IUserCompany;
+	userCompanyUpdatedBy?: IUserCompany;
+	company?: ICompany;
+}
 export interface IRoomPointSegmentRaw extends IEntity {
 	id: number;
 	reversePoints?: boolean;
@@ -1540,6 +1593,7 @@ export interface IRoomPointSegment extends IRoomPointSegmentRaw {
 	userCompanyCreatedBy?: IUserCompany;
 	userCompanyUpdatedBy?: IUserCompany;
 	company?: ICompany;
+	segmentConnectors?: IPaginationList<ISegmentConnector>;
 }
 export interface IRoomPointRaw extends IEntity {
 	id: number;
@@ -2172,6 +2226,43 @@ export interface IMapScale extends IMapScaleRaw {
 	company?: ICompany;
 	floors?: IPaginationList<IFloor>;
 }
+export interface IStructureExclusionPointRaw extends IEntity {
+	id: number;
+	x: number;
+	y: number;
+	sortIndex: number;
+	createdAt?: string;
+	updatedAt?: string;
+	externalId?: string;
+	structureExclusionId: number;
+	userCompanyCreatedById?: number | null;
+	userCompanyUpdatedById?: number | null;
+	companyId?: number | null;
+}
+export interface IStructureExclusionPoint extends IStructureExclusionPointRaw {
+	structureExclusion?: IStructureExclusion;
+	userCompanyCreatedBy?: IUserCompany;
+	userCompanyUpdatedBy?: IUserCompany;
+	company?: ICompany;
+}
+export interface IStructureExclusionRaw extends IEntity {
+	id: number;
+	name?: string;
+	createdAt?: string;
+	updatedAt?: string;
+	externalId?: string;
+	structureId: number;
+	userCompanyCreatedById?: number | null;
+	userCompanyUpdatedById?: number | null;
+	companyId?: number | null;
+}
+export interface IStructureExclusion extends IStructureExclusionRaw {
+	structure?: IStructure;
+	userCompanyCreatedBy?: IUserCompany;
+	userCompanyUpdatedBy?: IUserCompany;
+	company?: ICompany;
+	structureExclusionPoints?: IPaginationList<IStructureExclusionPoint>;
+}
 export interface IStructurePointRaw extends IEntity {
 	id: number;
 	x: number;
@@ -2208,6 +2299,7 @@ export interface IStructure extends IStructureRaw {
 	userCompanyUpdatedBy?: IUserCompany;
 	company?: ICompany;
 	structurePoints?: IPaginationList<IStructurePoint>;
+	structureExclusions?: IPaginationList<IStructureExclusion>;
 	floors?: IPaginationList<IFloor>;
 }
 export interface IFloorRaw extends IEntity {
@@ -2239,6 +2331,9 @@ export interface IFloorRaw extends IEntity {
 	backgroundLayout?: IJupImage;
 	backgroundLayoutOpacity?: number;
 	pathfindingGraph?: IFloorPathfindingGraph;
+	pathfindingGenerateStatus?: string;
+	pathfindingGenerateRequestedAt?: string;
+	pathfindingGenerateCompletedAt?: string;
 	createdAt?: string;
 	updatedAt?: string;
 	externalId?: string;
@@ -2898,6 +2993,8 @@ export interface IUserCompany extends IUserCompanyRaw {
 	campusUpdatedBies?: IPaginationList<ICampus>;
 	roomConnectorCreatedBies?: IPaginationList<IRoomConnector>;
 	roomConnectorUpdatedBies?: IPaginationList<IRoomConnector>;
+	segmentConnectorCreatedBies?: IPaginationList<ISegmentConnector>;
+	segmentConnectorUpdatedBies?: IPaginationList<ISegmentConnector>;
 	userCompanyCreatedBies?: IPaginationList<IUserCompany>;
 	userCompanyUpdatedBies?: IPaginationList<IUserCompany>;
 	personCompanyCreatedBies?: IPaginationList<IPersonCompany>;
@@ -2921,6 +3018,10 @@ export interface IUserCompany extends IUserCompanyRaw {
 	structureUpdatedBies?: IPaginationList<IStructure>;
 	structurePointCreatedBies?: IPaginationList<IStructurePoint>;
 	structurePointUpdatedBies?: IPaginationList<IStructurePoint>;
+	structureExclusionCreatedBies?: IPaginationList<IStructureExclusion>;
+	structureExclusionUpdatedBies?: IPaginationList<IStructureExclusion>;
+	structureExclusionPointCreatedBies?: IPaginationList<IStructureExclusionPoint>;
+	structureExclusionPointUpdatedBies?: IPaginationList<IStructureExclusionPoint>;
 	floorCreatedBies?: IPaginationList<IFloor>;
 	floorUpdatedBies?: IPaginationList<IFloor>;
 	distributionCostTypeCreatedBies?: IPaginationList<IDistributionCostType>;
@@ -3104,6 +3205,7 @@ export interface ICompanyRaw extends IEntity {
 	logoPath?: IJupImage;
 	iconPath?: IJupImage;
 	proxyImages?: boolean;
+	storeNewImagesOnAzureBlobStorage?: boolean;
 	workingDaysCount?: number;
 	enablePathfinding?: boolean;
 	planningNumberOfDays?: number;
@@ -3187,6 +3289,9 @@ export interface IBuildingRaw extends IEntity {
 	totalCapacityWorkplaceCountRatio?: number;
 	dimensionPeopleCount?: number;
 	address?: IJupAddress;
+	pathfindingRegenStatus?: string;
+	pathfindingRegenRequestedAt?: string;
+	pathfindingRegenCompletedAt?: string;
 	createdAt?: string;
 	updatedAt?: string;
 	externalId?: string;

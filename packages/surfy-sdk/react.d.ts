@@ -2,6 +2,124 @@
 
 import { CSSProperties, ReactElement, ReactNode } from 'react';
 
+declare const SURFY_SDK_ERROR_CODES: readonly [
+	"AUTH_EXPIRED",
+	"AUTH_FORBIDDEN",
+	"TENANT_MISMATCH",
+	"LAYOUT_NOT_FOUND",
+	"NETWORK",
+	"SDK_CONFIG",
+	"PIN_GPS_UNAVAILABLE"
+];
+export type SurfySdkErrorCode = (typeof SURFY_SDK_ERROR_CODES)[number];
+export interface SurfySdkErrorDetail {
+	readonly code: SurfySdkErrorCode;
+	readonly message: string;
+}
+/** Wall rendering mode for 3D layout elements (Cuby modes). */
+export type SurfyLayout3dWallMode = "no" | "half" | "reality" | "cuby" | "cuby-reality-selected" | "no-wall-selected";
+/** Camera control scheme when one vs several floors are visible. */
+export type SurfyLayout3dControls = "map" | "orbit" | "building";
+/** Default camera framing when fitting the scene. */
+export type SurfyLayout3dZoomMode = "isometric" | "zenith";
+/** Navigation preset applied when one floor is selected vs several. */
+export interface SurfyLayout3dNavigationOptions {
+	readonly controls?: SurfyLayout3dControls;
+	readonly zoomMode?: SurfyLayout3dZoomMode;
+}
+/** Imperative 3D display options for {@link SurfyLayoutElement.setOptions}. */
+export interface SurfyLayout3dOptions {
+	/** Vertical spacing between floors in the building scene (pixels). Default `240`. */
+	readonly floorSpace?: number;
+	readonly showRoomLabels?: boolean;
+	readonly showFloorLabels?: boolean;
+	/** Building rotation around Z axis in degrees. Default `0`. */
+	readonly buildingRotationZ?: number;
+	/** Floor ids to display; omit to show all floors from layout data. */
+	readonly selectedFloorIds?: readonly number[];
+	/** Default `cuby` in the SDK embed. */
+	readonly wallMode?: SurfyLayout3dWallMode;
+	/**
+	 * Show building structure meshes (ground + walls when created at load).
+	 * Default `false`. Set before first render to include structure wall geometry.
+	 */
+	readonly showStructureWalls?: boolean;
+	/**
+	 * Floor ids whose structure is visible when `showStructureWalls` is true.
+	 * Omit to show structure on all visible floors.
+	 */
+	readonly structureFloorIds?: readonly number[];
+	/** Navigation when a single floor is selected. Default `{ controls: 'map', zoomMode: 'zenith' }`. */
+	readonly singleFloorNavigation?: SurfyLayout3dNavigationOptions;
+	/** Navigation when several floors are selected. Default `{ controls: 'building', zoomMode: 'isometric' }`. */
+	readonly multiFloorNavigation?: SurfyLayout3dNavigationOptions;
+}
+/**
+ * Partial per-room update for {@link SurfyLayoutElement.updateRoom} / SurfySdk layout handle.
+ * Only provided keys are applied; others keep their current override.
+ */
+export interface SurfyRoomUpdateOptions {
+	/** CSS color. Pass `null` to remove this room from color overrides. */
+	readonly color?: string | null;
+	/** Show / hide the room name label (3D Cuby). */
+	readonly showLabel?: boolean;
+}
+declare const surfyPinIdBrand: unique symbol;
+export type SurfyPinId = string & {
+	readonly [surfyPinIdBrand]?: never;
+};
+/** Layout coords — floor-2d may omit `floorId` (defaults to mounted floor). */
+export type SurfyPinLayout = {
+	readonly x: number;
+	readonly y: number;
+	readonly floorId?: number;
+};
+/** GPS coords — `floorId` always required (no altitude). */
+export type SurfyPinGps = {
+	readonly lat: number;
+	readonly lng: number;
+	readonly floorId: number;
+};
+export type SurfyPinSpec = (SurfyPinLayout | SurfyPinGps) & {
+	readonly id?: SurfyPinId;
+	readonly label?: string;
+};
+/** Options for {@link SurfyLayoutElement.zoomToPin}. */
+export interface SurfyZoomToPinOptions {
+	readonly pinId: SurfyPinId;
+	readonly diameterMeters: number;
+	readonly animate?: boolean;
+}
+/** Options for {@link SurfyLayoutElement.zoomOn} / layout handle `zoomOn`. */
+export interface SurfyZoomOnOptions {
+	readonly roomId?: number;
+	readonly workplaceId?: number;
+	readonly itemId?: number;
+	readonly dimensionId?: number;
+	/** Visible disk diameter in meters around the target. */
+	readonly diameterMeters: number;
+	/** Animate the camera / SVG transform (default `true`). */
+	readonly animate?: boolean;
+}
+/** Host-supplied theme knobs for {@link SurfyLayoutElement.setTheme} / React `themeOptions`. */
+export type SurfyThemeOptions = {
+	readonly mode?: "light" | "dark";
+	readonly primary?: {
+		readonly main: string;
+		readonly light?: string;
+		readonly dark?: string;
+		readonly contrastText?: string;
+	};
+	readonly tooltip?: {
+		readonly backgroundColor?: string;
+		readonly color?: string;
+		readonly fontSize?: number | string;
+	};
+	readonly background?: {
+		readonly default?: string;
+		readonly paper?: string;
+	};
+};
 /** Opaque jotai store handle — runtime from `jotai` createStore. */
 export type SurfySdkJotaiStore = {
 	readonly get: (atom: unknown) => unknown;
@@ -11,67 +129,113 @@ export interface ISurfySdkReactProviderProps {
 	readonly children: ReactNode;
 	readonly store?: SurfySdkJotaiStore;
 }
-export interface ISurfyFloorLayout2dReactProps {
-	readonly floorId: number;
+/** Shared host callbacks / chrome for Surfy layout React surfaces. */
+export interface ISurfyLayoutReactHostProps {
 	readonly tenant: string;
 	readonly baseUrl: string;
 	readonly getAccessToken: () => Promise<string>;
 	readonly instanceId?: string;
 	readonly layoutData?: unknown;
+	readonly locale?: string;
 	readonly fillParent?: boolean;
 	readonly wrapProvider?: boolean;
 	readonly skipMasterDataPrepare?: boolean;
 	readonly style?: CSSProperties;
 	readonly className?: string;
-	readonly onReady?: () => void;
-	readonly onError?: (detail: unknown) => void;
+	readonly roomColors?: Readonly<Record<number, string>>;
+	readonly themeOptions?: SurfyThemeOptions;
+	readonly onReady?: (...args: unknown[]) => void;
+	readonly onError?: (detail: SurfySdkErrorDetail) => void;
+	readonly onRoomHover?: (detail: unknown) => void;
+	readonly onRoomSelected?: (detail: unknown) => void;
 	readonly children?: ReactNode;
 }
-export interface ISurfyBuildingLayout3dReactProps {
+export interface ISurfyFloorLayout2dReactProps extends ISurfyLayoutReactHostProps {
+	readonly floorId: number;
+}
+export interface ISurfyBuildingLayout3dReactProps extends ISurfyLayoutReactHostProps {
+	readonly buildingId: number;
+	readonly floorIds?: readonly number[];
+	readonly layout3dOptions?: SurfyLayout3dOptions;
+}
+export interface ISurfyFloorLayout3dReactProps extends ISurfyLayoutReactHostProps {
+	readonly floorId: number;
+	readonly buildingId?: number;
+	readonly layout3dOptions?: SurfyLayout3dOptions;
+}
+/** Runtime SimpleFloor root props (typed — no `[key: string]: unknown`). */
+export interface ISimpleFloorPlanRootProps {
+	readonly instanceId: string;
+	readonly floorId: number;
+	readonly tenant: string;
+	readonly baseUrl: string;
+	readonly getAccessToken: () => Promise<string>;
+	readonly locale?: string;
+	readonly layoutData: unknown;
+	readonly roomColors?: Readonly<Record<number, string>>;
+	readonly fillParent?: boolean;
+	readonly themeOptions?: SurfyThemeOptions;
+	readonly skipMasterDataPrepare?: boolean;
+	readonly onReady?: (floorId: number) => void;
+	readonly onError?: (detail: SurfySdkErrorDetail) => void;
+	readonly onRoomHover?: (detail: unknown) => void;
+	readonly onRoomSelected?: (detail: unknown) => void;
+	readonly children?: ReactNode;
+}
+/** Runtime SimpleBuilding root props (typed — no `[key: string]: unknown`). */
+export interface ISimpleBuildingPlanRootProps {
+	readonly instanceId: string;
 	readonly buildingId: number;
 	readonly tenant: string;
 	readonly baseUrl: string;
 	readonly getAccessToken: () => Promise<string>;
-	readonly instanceId?: string;
-	readonly layoutData?: unknown;
+	readonly locale?: string;
+	readonly layoutData: unknown;
+	readonly roomColors?: Readonly<Record<number, string>>;
+	readonly layout3dOptions?: SurfyLayout3dOptions;
 	readonly fillParent?: boolean;
-	readonly wrapProvider?: boolean;
+	readonly themeOptions?: SurfyThemeOptions;
 	readonly skipMasterDataPrepare?: boolean;
-	readonly style?: CSSProperties;
-	readonly className?: string;
-	readonly onReady?: () => void;
-	readonly onError?: (detail: unknown) => void;
+	readonly onReady?: (buildingId: number) => void;
+	readonly onError?: (detail: SurfySdkErrorDetail) => void;
+	readonly onRoomHover?: (detail: unknown) => void;
+	readonly onRoomSelected?: (detail: unknown) => void;
 	readonly children?: ReactNode;
 }
-export interface ISurfyFloorLayout3dReactProps {
-	readonly floorId: number;
-	readonly buildingId?: number;
-	readonly tenant: string;
-	readonly baseUrl: string;
-	readonly getAccessToken: () => Promise<string>;
-	readonly instanceId?: string;
-	readonly layoutData?: unknown;
-	readonly fillParent?: boolean;
-	readonly wrapProvider?: boolean;
-	readonly skipMasterDataPrepare?: boolean;
-	readonly style?: CSSProperties;
-	readonly className?: string;
-	readonly onReady?: () => void;
-	readonly onError?: (detail: unknown) => void;
-	readonly children?: ReactNode;
+/** Imperative handle — building 3D (pins/zoom + options/colors). */
+export interface ISurfyBuilding3dLayoutApi {
+	addPin(spec: SurfyPinSpec): SurfyPinId;
+	removePin(id: SurfyPinId): void;
+	clearPins(): void;
+	listPins(): readonly SurfyPinSpec[];
+	zoomToPin(options: SurfyZoomToPinOptions): void;
+	zoomOn(options: SurfyZoomOnOptions): void;
+	fitToView(): void;
+	setOptions(options: SurfyLayout3dOptions): void;
+	setRoomColors(colors: Record<number, string>): void;
+	clearRoomColors(): void;
+	updateRoom(roomId: number, options: SurfyRoomUpdateOptions): void;
 }
-export interface ISimpleFloorPlanRootProps {
-	readonly children?: ReactNode;
-	readonly [key: string]: unknown;
-}
-export interface ISimpleBuildingPlanRootProps {
-	readonly children?: ReactNode;
-	readonly [key: string]: unknown;
+export type ISurfyFloor3dLayoutApi = ISurfyBuilding3dLayoutApi;
+export interface ISurfyFloor2dLayoutApi {
+	addPin(spec: SurfyPinSpec): SurfyPinId;
+	removePin(id: SurfyPinId): void;
+	clearPins(): void;
+	listPins(): readonly SurfyPinSpec[];
+	zoomToPin(options: SurfyZoomToPinOptions): void;
+	zoomOn(options: SurfyZoomOnOptions): void;
+	setOptions(options: SurfyLayout3dOptions): void;
+	setRoomColors(colors: Record<number, string>): void;
+	clearRoomColors(): void;
+	updateRoom(roomId: number, options: SurfyRoomUpdateOptions): void;
 }
 export declare function SurfySdkReactProvider(props: ISurfySdkReactProviderProps): ReactElement;
-export declare function SurfyFloorLayout2dReact(props: ISurfyFloorLayout2dReactProps): ReactElement;
-export declare function SurfyBuildingLayout3dReact(props: ISurfyBuildingLayout3dReactProps): ReactElement;
-export declare function SurfyFloorLayout3dReact(props: ISurfyFloorLayout3dReactProps): ReactElement;
+export type SurfyBuildingLayout3dReactHandle = ISurfyBuilding3dLayoutApi;
+export type SurfyFloorLayout3dReactHandle = ISurfyFloor3dLayoutApi;
+export type SurfyFloorLayout2dReactHandle = ISurfyFloor2dLayoutApi;
+export declare const SurfyFloorLayout2dReact: import("react").ForwardRefExoticComponent<ISurfyFloorLayout2dReactProps & import("react").RefAttributes<SurfyFloorLayout2dReactHandle>>;
+export declare const SurfyBuildingLayout3dReact: import("react").ForwardRefExoticComponent<ISurfyBuildingLayout3dReactProps & import("react").RefAttributes<SurfyBuildingLayout3dReactHandle>>;
+export declare const SurfyFloorLayout3dReact: import("react").ForwardRefExoticComponent<ISurfyFloorLayout3dReactProps & import("react").RefAttributes<SurfyFloorLayout3dReactHandle>>;
 export declare function SimpleFloorPlanRoot(props: ISimpleFloorPlanRootProps): ReactElement;
 export declare function SimpleBuildingPlanRoot(props: ISimpleBuildingPlanRootProps): ReactElement;
 /** Vue plateforme — MapLibre + Cuby (WI-501). */
@@ -96,6 +260,9 @@ export interface ISurfyCampusView3dReactProps extends ISurfyPlatformView3dReactP
 }
 export declare function SurfyPlatformView3dReact(props: ISurfyPlatformView3dReactProps): ReactElement;
 export declare function SurfyCampusView3dReact(props: ISurfyCampusView3dReactProps): ReactElement;
+/** Vue Structure Cuby — extruded structures only (no classic Cuby rooms/spaces). */
+export type ISurfyStructureCubyView3dReactProps = ISurfyPlatformView3dReactProps;
+export declare function SurfyStructureCubyView3dReact(props: ISurfyStructureCubyView3dReactProps): ReactElement;
 export declare function useSurfySdkStore(): SurfySdkJotaiStore;
 export declare function useSurfySdkStoreOptional(): SurfySdkJotaiStore | null;
 export declare function useRoom(roomId: number): unknown;

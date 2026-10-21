@@ -21,6 +21,7 @@ var CLIENT_SECRET_KEY = "clientSecret";
 * Throws before any network I/O so secrets cannot leak into headers or JSON bodies.
 */
 function assertNoClientSecretInOptions(options) {
+	if (options === null || typeof options !== "object") return;
 	if (!Object.hasOwn(options, CLIENT_SECRET_KEY)) return;
 	if (options[CLIENT_SECRET_KEY] === void 0) return;
 	throw new Error("Surfy SDK: clientSecret is not allowed in client options — use getAccessToken only");

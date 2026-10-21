@@ -20,7 +20,8 @@
     "install:all": "pnpm install -r",
     "scan:secrets": "bash scripts/scan-secrets.sh",
     "quality": "pnpm --filter react-web lint && pnpm --filter react-web build && pnpm --filter demo-server typecheck",
-    "quality:full": "pnpm quality && pnpm test:e2e"
+    "quality:full": "pnpm quality && pnpm test:e2e",
+    "check:m2-building-3d-react": "node scripts/check-building-3d-react-m2.mjs"
   },
   "dependencies": {
     "@surfy/surfy-demo-auth": "workspace:*"

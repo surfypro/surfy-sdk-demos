@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SurfyLayout, SurfyLayout3dOptions, SurfyRoomUpdateOptions } from '@surfy/surfy-sdk';
 import { SurfySdk } from '@surfy/surfy-sdk';
+import type { ISurfyBuilding3dLayoutApi } from '@surfy/surfy-sdk/react';
 
 import {
   buildApiSnippetBlock,
+  snippetClearRoomColors,
   snippetFitToView,
   snippetSetOptions,
+  snippetSetRoomColors,
   snippetUpdateRoom,
   snippetZoomOnRoom,
 } from '../../../demoApiSnippets';
@@ -17,6 +20,7 @@ import { getSurfyDemoBaseUrl } from '../../../surfyEnv';
 import { ApiSnippetPanel } from '../actions/ApiSnippetPanel';
 import type { DemoSurfaceMode } from '../shared/demoSurfaceMode';
 import { DemoReactBuildingHost } from '../shared/DemoReactLayoutHost';
+import { DEMO_ROOM_COLOR } from '../shared/layoutDemo.constants';
 import { LayoutDemoCommonActions } from '../shared/LayoutDemoCommonActions';
 import { LayoutDemoShell } from '../shared/LayoutDemoShell';
 import { useLayoutDemoChrome } from '../shared/useLayoutDemoChrome';
@@ -35,8 +39,17 @@ interface Building3dDemoPanelProps {
   readonly description: string;
 }
 
+type BuildingDemoHandle = SurfyLayout | ISurfyBuilding3dLayoutApi;
+
+function hasRenderedRoomIds(
+  handle: BuildingDemoHandle | null,
+): handle is SurfyLayout {
+  return handle != null && typeof (handle as SurfyLayout).getRenderedRoomIds === 'function';
+}
+
 /**
  * Building 3D demo — API JS (`mountBuilding3d`) or Surfy React Web.
+ * React mode: floor toggles + hover/select log stay on the host (WI-429 M2).
  */
 export function Building3dDemoPanel({
   active,
@@ -49,7 +62,13 @@ export function Building3dDemoPanel({
   const [surfaceMode, setSurfaceMode] = useState<DemoSurfaceMode>('api-js');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const layoutRef = useRef<SurfyLayout | null>(null);
+  const reactLayoutRef = useRef<ISurfyBuilding3dLayoutApi | null>(null);
   const registered = SurfySdk.isKindRegistered('building-3d');
+
+  const initialLayout3dOptions = useMemo(
+    () => buildInitialBuilding3dOptions(buildingFloors.map((floor) => floor.id)),
+    [buildingFloors],
+  );
 
   const chrome = useLayoutDemoChrome({
     layoutRef,
@@ -80,32 +99,40 @@ export function Building3dDemoPanel({
     apiLog,
   } = chrome;
 
+  const activeHandle = useCallback((): BuildingDemoHandle | null => {
+    return surfaceMode === 'react-web' ? reactLayoutRef.current : layoutRef.current;
+  }, [surfaceMode]);
+
   const apply3dOptions = useCallback(
     (patch: SurfyLayout3dOptions) => {
-      layoutRef.current?.setOptions(patch);
+      activeHandle()?.setOptions(patch);
       pushApiLine(snippetSetOptions(JSON.stringify(patch)));
     },
-    [pushApiLine],
+    [activeHandle, pushApiLine],
   );
 
-  const updateRoom = useCallback((roomId: number, options: SurfyRoomUpdateOptions) => {
-    layoutRef.current?.updateRoom(roomId, options);
-  }, []);
+  const updateRoom = useCallback(
+    (roomId: number, options: SurfyRoomUpdateOptions) => {
+      activeHandle()?.updateRoom(roomId, options);
+    },
+    [activeHandle],
+  );
 
   const fitToView = useCallback(() => {
-    layoutRef.current?.fitToView();
+    activeHandle()?.fitToView();
     pushApiLine(snippetFitToView());
-  }, [pushApiLine]);
+  }, [activeHandle, pushApiLine]);
 
   const zoomOnRoom = useCallback(
     (roomId: number) => {
-      if (!isRenderedDemoRoom(layoutRef.current, roomId)) {
+      const handle = activeHandle();
+      if (hasRenderedRoomIds(handle) && !isRenderedDemoRoom(handle, roomId)) {
         return;
       }
-      layoutRef.current?.zoomOn({ roomId, diameterMeters: 5 });
+      handle?.zoomOn({ roomId, diameterMeters: 5 });
       pushApiLine(snippetZoomOnRoom(roomId));
     },
-    [pushApiLine],
+    [activeHandle, pushApiLine],
   );
 
   const logUpdateRoom = useCallback(
@@ -114,6 +141,29 @@ export function Building3dDemoPanel({
     },
     [pushApiLine],
   );
+
+  const onColorRoom = useCallback(
+    (roomId: number) => {
+      if (surfaceMode === 'react-web') {
+        reactLayoutRef.current?.setRoomColors({ [roomId]: DEMO_ROOM_COLOR });
+        pushApiLine(snippetSetRoomColors(roomId, DEMO_ROOM_COLOR));
+        return;
+      }
+      colorDemoRoom(roomId);
+    },
+    [surfaceMode, colorDemoRoom, pushApiLine],
+  );
+
+  const onClearColors = useCallback(() => {
+    if (surfaceMode === 'react-web') {
+      reactLayoutRef.current?.clearRoomColors();
+      pushApiLine(snippetClearRoomColors());
+      return;
+    }
+    clearColors();
+  }, [surfaceMode, clearColors, pushApiLine]);
+
+  const reactListeners = useMemo(() => createMountListeners(), [createMountListeners]);
 
   useEffect(() => {
     if (!active || surfaceMode !== 'api-js' || buildingId === undefined || !registered) return;
@@ -128,7 +178,7 @@ export function Building3dDemoPanel({
       buildingId,
       fillParent: true,
       theme: getDemoThemeOptions(themeId),
-      options: buildInitialBuilding3dOptions(buildingFloors.map((floor) => floor.id)),
+      options: initialLayout3dOptions,
       getAccessToken: () => getDemoProxyBearer(),
       ...createMountListeners(),
     });
@@ -145,12 +195,20 @@ export function Building3dDemoPanel({
     surfaceMode,
     tenant,
     buildingId,
-    buildingFloors,
+    initialLayout3dOptions,
     themeId,
     registered,
     createMountListeners,
     resetOnUnmount,
   ]);
+
+  useEffect(() => {
+    if (surfaceMode !== 'react-web') return;
+    return () => {
+      resetOnUnmount();
+      reactLayoutRef.current = null;
+    };
+  }, [surfaceMode, buildingId, resetOnUnmount]);
 
   if (!active) {
     return null;
@@ -170,7 +228,17 @@ export function Building3dDemoPanel({
       onSurfaceModeChange={setSurfaceMode}
       mapChildren={
         buildingId !== undefined ? (
-          <DemoReactBuildingHost tenant={tenant} buildingId={buildingId} />
+          <DemoReactBuildingHost
+            ref={reactLayoutRef}
+            tenant={tenant}
+            buildingId={buildingId}
+            layout3dOptions={initialLayout3dOptions}
+            themeOptions={getDemoThemeOptions(themeId) ?? undefined}
+            onReady={reactListeners.onReady}
+            onError={reactListeners.onError}
+            onRoomHover={reactListeners.onRoomHover}
+            onRoomSelected={reactListeners.onRoomSelected}
+          />
         ) : null
       }
       sidebar={
@@ -181,13 +249,13 @@ export function Building3dDemoPanel({
             randomBlinkOn={randomBlinkOn}
             lastBlink={lastBlink}
             fillParent={fillParent}
-            onColorRoom={colorDemoRoom}
+            onColorRoom={onColorRoom}
             onToggleBlink={toggleRandomBlink}
-            onClearColors={clearColors}
+            onClearColors={onClearColors}
             onFillParentChange={setFillParent}
             onFitToView={fitToView}
             onZoomOnRoom={zoomOnRoom}
-            pinsEnabled={pinsEnabled}
+            pinsEnabled={pinsEnabled && surfaceMode === 'api-js'}
             pinBusy={pinBusy}
             onPinRandomRoom={pinOnRandomRoom}
             onPinRandomPlan={pinOnRandomPlan}

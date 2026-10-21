@@ -1,17 +1,26 @@
-import { useEffect, useState } from 'react';
+import { forwardRef, useEffect, useState } from 'react';
 import {
   fetchBuildingLayoutData,
   fetchFloorLayoutData,
   type IEmbedLayoutViewData,
+  type SurfyLayout3dOptions,
+  type SurfySdkErrorDetail,
+  type SurfyThemeOptions,
 } from '@surfy/surfy-sdk';
 import {
   SurfyBuildingLayout3dReact,
   SurfyFloorLayout2dReact,
   SurfyFloorLayout3dReact,
+  type ISurfyBuilding3dLayoutApi,
 } from '@surfy/surfy-sdk/react';
 
 import { getDemoProxyBearer } from '../../../demoSession';
 import { getSurfyDemoBaseUrl } from '../../../surfyEnv';
+
+interface DemoRoomInteractionDetail {
+  readonly roomId: number;
+  readonly name: string;
+}
 
 interface DemoReactFloorHostProps {
   readonly kind: 'floor-2d' | 'floor-3d';
@@ -22,6 +31,12 @@ interface DemoReactFloorHostProps {
 interface DemoReactBuildingHostProps {
   readonly tenant: string;
   readonly buildingId: number;
+  readonly layout3dOptions?: SurfyLayout3dOptions;
+  readonly themeOptions?: SurfyThemeOptions;
+  readonly onReady?: () => void;
+  readonly onError?: (detail: SurfySdkErrorDetail) => void;
+  readonly onRoomHover?: (detail: DemoRoomInteractionDetail | null) => void;
+  readonly onRoomSelected?: (detail: DemoRoomInteractionDetail) => void;
 }
 
 export function DemoReactFloorHost({ kind, tenant, floorId }: DemoReactFloorHostProps) {
@@ -77,7 +92,26 @@ export function DemoReactFloorHost({ kind, tenant, floorId }: DemoReactFloorHost
   return <SurfyFloorLayout2dReact {...common} />;
 }
 
-export function DemoReactBuildingHost({ tenant, buildingId }: DemoReactBuildingHostProps) {
+/**
+ * Surfy React Web building-3d host — fetch layout then mount public component.
+ * Host chrome (floors / hover log) stays outside via ref + callback props (WI-429 M2).
+ */
+export const DemoReactBuildingHost = forwardRef<
+  ISurfyBuilding3dLayoutApi,
+  DemoReactBuildingHostProps
+>(function DemoReactBuildingHost(
+  {
+    tenant,
+    buildingId,
+    layout3dOptions,
+    themeOptions,
+    onReady,
+    onError,
+    onRoomHover,
+    onRoomSelected,
+  },
+  ref,
+) {
   const [layout, setLayout] = useState<IEmbedLayoutViewData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -117,12 +151,19 @@ export function DemoReactBuildingHost({ tenant, buildingId }: DemoReactBuildingH
 
   return (
     <SurfyBuildingLayout3dReact
+      ref={ref}
       tenant={tenant}
       baseUrl={getSurfyDemoBaseUrl()}
       buildingId={buildingId}
       layoutData={layout as never}
       getAccessToken={() => getDemoProxyBearer()}
       fillParent
+      layout3dOptions={layout3dOptions}
+      themeOptions={themeOptions}
+      onReady={onReady}
+      onError={onError}
+      onRoomHover={onRoomHover as ((detail: unknown) => void) | undefined}
+      onRoomSelected={onRoomSelected as ((detail: unknown) => void) | undefined}
     />
   );
-}
+});
