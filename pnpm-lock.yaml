@@ -21,6 +21,9 @@ importers:
       esbuild:
         specifier: ^0.25.12
         version: 0.25.12
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
 
   apps/demo-server:
     dependencies:
@@ -64,6 +67,9 @@ importers:
       react-router-dom:
         specifier: ^7.18.1
         version: 7.18.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      three:
+        specifier: 0.186.1
+        version: 0.186.1
     devDependencies:
       '@playwright/test':
         specifier: ^1.51.1
@@ -110,6 +116,9 @@ importers:
       react-dom:
         specifier: '>=18'
         version: 19.2.7(react@19.2.7)
+      three:
+        specifier: '>=0.186'
+        version: 0.186.1
 
 packages:
 
@@ -2892,6 +2901,9 @@ packages:
 
   text-hex@1.0.0:
     resolution: {integrity: sha512-uuVGNWzgJ4yhRaNSiubPY7OjISw4sw4E5Uv0wbjp+OzcbmVU/rsT8ujgcXJhn9ypzsgr5vlzpPqP+MBBKcGvbg==}
+
+  three@0.186.1:
+    resolution: {integrity: sha512-blFeqb49wRCSGUGj7gtpfnSGHy2lwDk94RhUmS1c/hTby70kvChbWpkJ4Pm1390LqzzvTmzgXKHPEafJwCb8jA==}
 
   tinyglobby@0.2.17:
     resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
@@ -5885,6 +5897,8 @@ snapshots:
       - react-native-b4a
 
   text-hex@1.0.0: {}
+
+  three@0.186.1: {}
 
   tinyglobby@0.2.17:
     dependencies:

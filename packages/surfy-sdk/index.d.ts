@@ -91,8 +91,16 @@ export interface SurfyLayoutMountBaseOptions {
 	/** Host node or CSS selector where the layout is mounted. */
 	readonly container: HTMLElement | string;
 	readonly tenant: string;
-	/** Surfy API origin without trailing slash. */
+	/**
+	 * Surfy API origin (or auth proxy) without trailing slash.
+	 * Authenticated REST/RPC only — not for public `/assets/*`.
+	 */
 	readonly baseUrl: string;
+	/**
+	 * Surfy origin for public static assets (`/assets/fonts…`). Defaults to {@link baseUrl}.
+	 * When `baseUrl` is an auth proxy, set this to the real Surfy host so fonts/CSS bypass the proxy.
+	 */
+	readonly assetsBaseUrl?: string;
 	readonly locale?: string;
 	/** Default `true`. */
 	readonly fillParent?: boolean;

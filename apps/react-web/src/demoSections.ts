@@ -1,8 +1,9 @@
-import type { SurfyLayoutKind } from '@surfy/surfy-sdk';
-import { SurfySdk } from '@surfy/surfy-sdk';
+/** Demo section registry — no `@surfy/surfy-sdk` import (keeps WC/Three out of the React-only graph). */
+
+export type SurfyLayoutKind = 'floor-2d' | 'building-3d' | 'floor-3d';
 
 export type DemoLayoutSectionId = SurfyLayoutKind;
-export type DemoPlatformSectionId = 'platform-3d' | 'campus-3d';
+export type DemoPlatformSectionId = 'platform-3d';
 export type DemoSectionId = DemoLayoutSectionId | DemoPlatformSectionId | 'data-api';
 
 export type DemoEntityKind = 'floor' | 'building' | 'none' | 'platform';
@@ -45,15 +46,7 @@ export const DEMO_SECTIONS: readonly DemoSectionConfig[] = [
     kind: null,
     entityKind: 'platform',
     description:
-      'MapLibre + Cuby multi-bâtiments (tenant) — offline + Position par altitude. React only.',
-  },
-  {
-    id: 'campus-3d',
-    label: 'Vue campus',
-    kind: null,
-    entityKind: 'platform',
-    description:
-      'MapLibre + Cuby scoped par campusId — même stack que la Vue plateforme. React only.',
+      'SurfyPlatformView3dReact — même stack que building/3d-maplibre (MapLibre + Cuby, tenant). React only.',
   },
   {
     id: 'data-api',
@@ -73,11 +66,12 @@ export function isLayoutSection(
 export function isPlatformSection(
   section: DemoSectionConfig,
 ): section is DemoSectionConfig & { id: DemoPlatformSectionId; entityKind: 'platform' } {
-  return section.entityKind === 'platform' && (section.id === 'platform-3d' || section.id === 'campus-3d');
+  return section.entityKind === 'platform' && section.id === 'platform-3d';
 }
 
+/** Layout WC kinds shipped by the demo — true without loading `@surfy/surfy-sdk` (index). */
 export function isSectionKindRegistered(kind: SurfyLayoutKind): boolean {
-  return SurfySdk.isKindRegistered(kind);
+  return kind === 'floor-2d' || kind === 'building-3d' || kind === 'floor-3d';
 }
 
 export function resolveSectionEntityId(

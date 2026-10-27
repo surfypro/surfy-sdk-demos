@@ -22,6 +22,8 @@ import {
 type SessionResponse = {
   tenant: string;
   authMode: 'api';
+  /** Surfy host for public `/assets/*` — browser must not load these via `/proxy`. */
+  assetsOrigin: string;
 };
 
 type ErrorResponse = {
@@ -150,7 +152,11 @@ app.get('/api/session', async (req: Request, res: Response<SessionResponse | Err
     assertDemoGate(readDemoGateKey(req), authEnv.demoGateKey);
     await resolveSurfyBearer(authEnv); // warm cache / fail fast
     setSessionCookie(res, authEnv);
-    res.json({ tenant: authEnv.clientId, authMode: 'api' });
+    res.json({
+      tenant: authEnv.clientId,
+      authMode: 'api',
+      assetsOrigin: authEnv.baseUrl.replace(/\/$/, ''),
+    });
   } catch (error) {
     sendAuthError(res, error, 'Session failed');
   }
@@ -182,12 +188,29 @@ app.get('/api/health', (_req: Request, res: Response<{ status: 'ok' }>) => {
  * Browser: `/proxy/api/v1/...` (+ optional `?surfyApiOrigin=` / `X-Surfy-API-Origin`).
  * Server injects Bearer from SURFY_CONNECTION_STRING and forwards method/query/body.
  */
-app.use(SURFY_DEMO_PROXY_PATH_PREFIX, requireSession, rateLimit, async (req: Request, res: Response) => {
+/** Reject `/proxy/.../assets/...` before rate-limit — fonts must use session `assetsOrigin`. */
+function rejectProxiedStaticAssets(req: Request, res: Response, next: NextFunction): void {
+  const pathOnly = `${SURFY_DEMO_PROXY_PATH_PREFIX}${req.url.split('?')[0] || ''}`;
+  if (!pathOnly.includes('/assets/')) {
+    next();
+    return;
+  }
+  res.status(400).json({
+    error: 'Static /assets/* must be loaded from Surfy assetsOrigin (session), not /proxy',
+    code: 'DEMO_PROXY_ASSETS_FORBIDDEN',
+  });
+}
+
+app.use(
+  SURFY_DEMO_PROXY_PATH_PREFIX,
+  requireSession,
+  rejectProxiedStaticAssets,
+  rateLimit,
+  async (req: Request, res: Response) => {
   try {
     const authEnv = getAuthEnv();
-    const upstreamPath = resolveSurfyProxyUpstreamPath(
-      `${SURFY_DEMO_PROXY_PATH_PREFIX}${req.url.split('?')[0] || ''}`,
-    );
+    const requestPath = `${SURFY_DEMO_PROXY_PATH_PREFIX}${req.url.split('?')[0] || ''}`;
+    const upstreamPath = resolveSurfyProxyUpstreamPath(requestPath);
     const rawQuery = req.url.includes('?') ? req.url.slice(req.url.indexOf('?') + 1) : undefined;
 
     const chunks: Buffer[] = [];

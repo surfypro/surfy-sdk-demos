@@ -8,9 +8,15 @@ test.describe('Demo server auth proxy', () => {
     const response = await request.get('/api/session');
     expect(response.ok()).toBeTruthy();
 
-    const body = (await response.json()) as { token?: string; tenant?: string; authMode?: string };
+    const body = (await response.json()) as {
+      token?: string;
+      tenant?: string;
+      authMode?: string;
+      assetsOrigin?: string;
+    };
     expect(body.tenant).toBeTruthy();
     expect(body.authMode).toBe('api');
+    expect(body.assetsOrigin).toMatch(/^https?:\/\//);
     expect(body.token).toBeUndefined();
 
     const setCookie = response.headers()['set-cookie'] ?? '';

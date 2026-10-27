@@ -32,7 +32,11 @@ Les endpoints serveur restent `/api/session`, `/api/v1/*`, etc. (proxy Vite rest
 ## Avant de dire « done »
 
 ```bash
-pnpm quality
+pnpm quality:agent:code   # milestone — lint + tsc (errors-only → .surfy/quality-agent/)
+# avant push / PR :
+pnpm quality:agent:ci
 ```
+
+Réf. : [docs/dev/quality-agent.md](../../docs/dev/quality-agent.md). Sur FAIL → lire les JSON déposés (pas de dump `tsc`/`oxlint` brut).
 
 Si API SDK démontrée : snippets + page `surfy-help/entities/sdk/`.

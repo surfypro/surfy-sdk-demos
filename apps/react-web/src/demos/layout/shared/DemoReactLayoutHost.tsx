@@ -16,6 +16,7 @@ import {
 
 import { getDemoProxyBearer } from '../../../demoSession';
 import { getSurfyDemoBaseUrl } from '../../../surfyEnv';
+import { useDemoAssetsBaseUrl } from '../../../useDemoAssetsBaseUrl';
 
 interface DemoRoomInteractionDetail {
   readonly roomId: number;
@@ -40,6 +41,7 @@ interface DemoReactBuildingHostProps {
 }
 
 export function DemoReactFloorHost({ kind, tenant, floorId }: DemoReactFloorHostProps) {
+  const assetsBaseUrl = useDemoAssetsBaseUrl();
   const [layout, setLayout] = useState<IEmbedLayoutViewData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,13 +75,14 @@ export function DemoReactFloorHost({ kind, tenant, floorId }: DemoReactFloorHost
       </p>
     );
   }
-  if (!layout) {
+  if (!layout || !assetsBaseUrl) {
     return <p data-testid="demo-react-layout-loading">Loading layout…</p>;
   }
 
   const common = {
     tenant,
     baseUrl: getSurfyDemoBaseUrl(),
+    assetsBaseUrl,
     floorId,
     layoutData: layout as never,
     getAccessToken: () => getDemoProxyBearer(),
@@ -112,6 +115,7 @@ export const DemoReactBuildingHost = forwardRef<
   },
   ref,
 ) {
+  const assetsBaseUrl = useDemoAssetsBaseUrl();
   const [layout, setLayout] = useState<IEmbedLayoutViewData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -145,7 +149,7 @@ export const DemoReactBuildingHost = forwardRef<
       </p>
     );
   }
-  if (!layout) {
+  if (!layout || !assetsBaseUrl) {
     return <p data-testid="demo-react-layout-loading">Loading layout…</p>;
   }
 
@@ -154,6 +158,7 @@ export const DemoReactBuildingHost = forwardRef<
       ref={ref}
       tenant={tenant}
       baseUrl={getSurfyDemoBaseUrl()}
+      assetsBaseUrl={assetsBaseUrl}
       buildingId={buildingId}
       layoutData={layout as never}
       getAccessToken={() => getDemoProxyBearer()}

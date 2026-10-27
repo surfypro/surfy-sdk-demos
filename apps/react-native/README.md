@@ -1,22 +1,10 @@
-# React Native demo (WebView path)
+# React Native demo (deferred)
 
-The **same** UI as React web lives in `apps/react-web/src/DemoWorkbench.tsx`.
+The in-browser **React Native WebView simulator** was removed from `apps/react-web`.
 
-On the Vite site:
+Auth for the public demo is **API server session + proxy only** (no Entra/OAuth UI).
 
-1. `pnpm dev` → http://localhost:5173 → redirects to `/api/react-web/floor-2d`
-2. Open `/api/react-native/building-3d` (or use the host tabs) → phone chrome + iframe
-3. Iframe loads `/api/react-web/<section>?embed=1` (same workbench, embed chrome)
+Routes are now `/:section` (e.g. `/floor-2d`, `/platform-3d`). Legacy
+`/api|oauth/react-web|react-native/:section` URLs redirect to `/:section`.
 
-```text
-/:authMode/:host/:section
-  api | oauth
-    react-web | react-native
-      floor-2d | building-3d | data-api
-
-RN shell (native UI)          ← simulated by phone chrome
-  └─ react-native-webview     ← iframe
-       └─ DemoWorkbench       ← shared with React web
-```
-
-No APK required. Real Expo app later can point `WebView` at e.g. `/api/react-web/floor-2d?embed=1` (Netlify or LAN).
+A real Expo / RN app can still load the web demo later, e.g. `https://…/floor-2d`.

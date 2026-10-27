@@ -11,7 +11,7 @@ This app can be deployed on **Netlify** and talk to **Surfy alpha** (or another 
 | Building / floor picker | Yes — reference buildings via proxy `POST /proxy/api/v1/data/entities` |
 | Session `/api/session` | Yes — HttpOnly cookie; **no Surfy JWT in the browser** |
 | Layout API via same-origin proxy | Yes — unique `/proxy/*` injects Bearer from connection string |
-| React Native | Not on Netlify — use Expo/EAS; WebView loads e.g. `/api/react-web/floor-2d?embed=1` |
+| React Native | Deferred — web demo only (`/:section`, e.g. `/floor-2d`) |
 
 ## Security model (important)
 
@@ -169,4 +169,4 @@ Compose injects `SURFY_CONNECTION_STRING` / `DEMO_GATE_KEY` at **container start
 
 ## React Native note
 
-Netlify hosts the **web** demo only. For RN, load the same deployed origin in a WebView (e.g. `/api/react-web/floor-2d?embed=1`) so the session cookie stays on that origin.
+Netlify hosts the **web** demo only (`/:section`). Auth is API session + Functions proxy.

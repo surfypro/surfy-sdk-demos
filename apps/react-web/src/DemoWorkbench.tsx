@@ -1,11 +1,6 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 
 import { DataApiDemoPanel } from './demos/data/DataApiDemoPanel';
-import { Building3dDemoPanel } from './demos/layout/building-3d/Building3dDemoPanel';
-import { Floor2dDemoPanel } from './demos/layout/floor-2d/Floor2dDemoPanel';
-import { Floor3dDemoPanel } from './demos/layout/floor-3d/Floor3dDemoPanel';
-import { PlatformCampusDemoPanel } from './demos/platform/PlatformCampusDemoPanel';
-import type { DemoAuthMode } from './demoRoutes';
 import {
   DEMO_SECTIONS,
   isLayoutSection,
@@ -15,6 +10,26 @@ import {
 import { DemoScopePicker } from './DemoScopePicker';
 import { fetchDemoCatalog, type DemoBuilding, type DemoCatalog, type DemoFloor } from './fetchDemoCatalog';
 import { useDemoI18n } from './i18n/DemoI18nProvider';
+
+/** Layout WC panels — pull `@surfy/surfy-sdk` (index + Three). Lazy so platform never loads them. */
+const Floor2dDemoPanel = lazy(async () => {
+  const m = await import('./demos/layout/floor-2d/Floor2dDemoPanel');
+  return { default: m.Floor2dDemoPanel };
+});
+const Building3dDemoPanel = lazy(async () => {
+  const m = await import('./demos/layout/building-3d/Building3dDemoPanel');
+  return { default: m.Building3dDemoPanel };
+});
+const Floor3dDemoPanel = lazy(async () => {
+  const m = await import('./demos/layout/floor-3d/Floor3dDemoPanel');
+  return { default: m.Floor3dDemoPanel };
+});
+
+/** Platform (`platform-3d` ↔ building/3d-maplibre) — `@surfy/surfy-sdk/react` only. */
+const PlatformCampusDemoPanel = lazy(async () => {
+  const m = await import('./demos/platform/PlatformCampusDemoPanel');
+  return { default: m.PlatformCampusDemoPanel };
+});
 
 const EMPTY_FLOORS: readonly DemoFloor[] = [];
 
@@ -33,16 +48,14 @@ function pickInitialScope(buildings: readonly DemoBuilding[]): {
 }
 
 interface DemoWorkbenchProps {
-  readonly embedded?: boolean;
-  readonly authMode: DemoAuthMode;
   readonly activeSection: DemoSectionId;
 }
 
 /**
- * Shared demo UI (React web + RN WebView embed).
- * Section comes from the URL (`/:authMode/:host/:section`).
+ * Demo workbench — API session + proxy only.
+ * Section from URL (`/:section`). Layout WC vs React platform via `React.lazy`.
  */
-export function DemoWorkbench({ embedded = false, authMode, activeSection }: DemoWorkbenchProps) {
+export function DemoWorkbench({ activeSection }: DemoWorkbenchProps) {
   const { t } = useDemoI18n();
   const [catalog, setCatalog] = useState<DemoCatalog | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -51,13 +64,6 @@ export function DemoWorkbench({ embedded = false, authMode, activeSection }: Dem
   const [floorId, setFloorId] = useState<number | undefined>();
 
   useEffect(() => {
-    if (authMode !== 'api') {
-      setCatalog(null);
-      setCatalogError(null);
-      setCatalogLoading(false);
-      return;
-    }
-
     let cancelled = false;
     setCatalogLoading(true);
     setCatalogError(null);
@@ -81,7 +87,7 @@ export function DemoWorkbench({ embedded = false, authMode, activeSection }: Dem
     return () => {
       cancelled = true;
     };
-  }, [authMode]);
+  }, []);
 
   const selectedBuilding = catalog?.buildings.find((b) => b.id === buildingId);
   const scopeVariant = activeSection === 'building-3d' ? 'building' : 'floor';
@@ -97,23 +103,8 @@ export function DemoWorkbench({ embedded = false, authMode, activeSection }: Dem
     setFloorId(building?.floors[0]?.id);
   };
 
-  if (authMode === 'oauth') {
-    return (
-      <div className="demo-workbench" data-testid="demo-workbench-oauth">
-        <div className="demo-section__unavailable" data-testid="oauth-coming-soon">
-          <p>{t('oauth.comingSoon')}</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div
-      className={`demo-workbench${embedded ? ' demo-workbench--embedded' : ''}`}
-      data-testid="demo-workbench"
-    >
-      {!embedded ? <p className="page__intro demo-workbench__intro">{t('workbench.intro')}</p> : null}
-
+    <div className="demo-workbench" data-testid="demo-workbench">
       {layoutSection && catalogLoading ? (
         <p data-testid="demo-catalog-loading">{t('workbench.loading')}</p>
       ) : null}
@@ -125,9 +116,9 @@ export function DemoWorkbench({ embedded = false, authMode, activeSection }: Dem
       ) : null}
 
       {catalog && layoutSection ? (
-        <>
+        <div className="demo-workbench__toolbar">
           <p className="demo-tenant" data-testid="demo-tenant">
-            {t('workbench.tenant')}: <code>{catalog.tenant}</code> · {t('workbench.session')}
+            {t('workbench.tenant')}: <code>{catalog.tenant}</code>
           </p>
           <DemoScopePicker
             buildings={catalog.buildings}
@@ -141,56 +132,57 @@ export function DemoWorkbench({ embedded = false, authMode, activeSection }: Dem
           {scopeVariant === 'floor' && selectedBuilding && selectedBuilding.floors.length === 0 ? (
             <p className="demo-catalog-hint">{t('workbench.noFloors')}</p>
           ) : null}
-        </>
+        </div>
       ) : null}
 
       {activeSection === 'data-api' ? <DataApiDemoPanel active /> : null}
 
-      {platformSection ? (
-        <PlatformCampusDemoPanel
-          key={platformSection.id}
-          active
-          mode={platformSection.id === 'campus-3d' ? 'campus' : 'platform'}
-          tenant={catalog?.tenant}
-          title={platformSection.label}
-          description={platformSection.description}
-        />
-      ) : null}
+      <Suspense fallback={<p data-testid="demo-section-loading">{t('workbench.loading')}</p>}>
+        {platformSection ? (
+          <PlatformCampusDemoPanel
+            key={platformSection.id}
+            active
+            tenant={catalog?.tenant}
+            title={platformSection.label}
+            description={platformSection.description}
+          />
+        ) : null}
 
-      {catalog && layoutSection?.id === 'floor-2d' ? (
-        <Floor2dDemoPanel
-          key="floor-2d"
-          active
-          tenant={catalog.tenant}
-          floorId={floorId}
-          title={layoutSection.label}
-          description={layoutSection.description}
-        />
-      ) : null}
+        {catalog && layoutSection?.id === 'floor-2d' ? (
+          <Floor2dDemoPanel
+            key="floor-2d"
+            active
+            tenant={catalog.tenant}
+            floorId={floorId}
+            title={layoutSection.label}
+            description={layoutSection.description}
+          />
+        ) : null}
 
-      {catalog && layoutSection?.id === 'building-3d' ? (
-        <Building3dDemoPanel
-          key="building-3d"
-          active
-          tenant={catalog.tenant}
-          buildingId={buildingId}
-          buildingFloors={selectedBuilding?.floors ?? EMPTY_FLOORS}
-          title={layoutSection.label}
-          description={layoutSection.description}
-        />
-      ) : null}
+        {catalog && layoutSection?.id === 'building-3d' ? (
+          <Building3dDemoPanel
+            key="building-3d"
+            active
+            tenant={catalog.tenant}
+            buildingId={buildingId}
+            buildingFloors={selectedBuilding?.floors ?? EMPTY_FLOORS}
+            title={layoutSection.label}
+            description={layoutSection.description}
+          />
+        ) : null}
 
-      {catalog && layoutSection?.id === 'floor-3d' ? (
-        <Floor3dDemoPanel
-          key="floor-3d"
-          active
-          tenant={catalog.tenant}
-          floorId={floorId}
-          floor={selectedBuilding?.floors.find((f) => f.id === floorId)}
-          title={layoutSection.label}
-          description={layoutSection.description}
-        />
-      ) : null}
+        {catalog && layoutSection?.id === 'floor-3d' ? (
+          <Floor3dDemoPanel
+            key="floor-3d"
+            active
+            tenant={catalog.tenant}
+            floorId={floorId}
+            floor={selectedBuilding?.floors.find((f) => f.id === floorId)}
+            title={layoutSection.label}
+            description={layoutSection.description}
+          />
+        ) : null}
+      </Suspense>
     </div>
   );
 }

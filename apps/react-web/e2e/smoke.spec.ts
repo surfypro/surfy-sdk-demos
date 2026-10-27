@@ -12,13 +12,13 @@ test.describe('React demo shell', () => {
 
     await page.goto('/');
 
-    await expect(page).toHaveURL(/\/api\/react-web\/floor-2d$/);
-    await expect(page.getByRole('heading', { name: 'Surfy SDK Demo' })).toBeVisible();
-    await expect(page.getByTestId('auth-mode-api')).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Étage 2D' })).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Bâtiment 3D' })).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Étage 3D' })).toBeVisible();
+    await expect(page).toHaveURL(/\/floor-2d$/);
+    await expect(page.getByTestId('demo-topbar')).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.getByTestId('demo-tab-floor-2d')).toBeVisible();
+    await expect(page.getByTestId('demo-tab-building-3d')).toBeVisible();
     await expect(page.getByTestId('demo-tab-floor-3d')).toBeVisible();
+    await expect(page.getByTestId('demo-tab-platform-3d')).toBeVisible();
 
     if (hasSdkCredentials) {
       await expect(page.getByTestId('demo-scope-picker')).toBeVisible({ timeout: 60_000 });

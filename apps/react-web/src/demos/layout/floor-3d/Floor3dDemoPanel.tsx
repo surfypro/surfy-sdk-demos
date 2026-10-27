@@ -14,6 +14,7 @@ import { getDemoProxyBearer } from '../../../demoSession';
 import { getDemoThemeOptions } from '../../../demoThemes';
 import type { DemoFloor } from '../../../fetchDemoCatalog';
 import { getSurfyDemoBaseUrl } from '../../../surfyEnv';
+import { useDemoAssetsBaseUrl } from '../../../useDemoAssetsBaseUrl';
 import { ApiSnippetPanel } from '../actions/ApiSnippetPanel';
 import type { DemoSurfaceMode } from '../shared/demoSurfaceMode';
 import { DemoReactFloorHost } from '../shared/DemoReactLayoutHost';
@@ -51,6 +52,7 @@ export function Floor3dDemoPanel({
   const [surfaceMode, setSurfaceMode] = useState<DemoSurfaceMode>('api-js');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const layoutRef = useRef<SurfyLayout | null>(null);
+  const assetsBaseUrl = useDemoAssetsBaseUrl();
   const registered = SurfySdk.isKindRegistered('floor-3d');
 
   const floorsForControls = useMemo((): readonly DemoFloor[] => {
@@ -126,7 +128,9 @@ export function Floor3dDemoPanel({
   );
 
   useEffect(() => {
-    if (!active || surfaceMode !== 'api-js' || floorId === undefined || !registered) return;
+    if (!active || surfaceMode !== 'api-js' || floorId === undefined || !registered || !assetsBaseUrl) {
+      return;
+    }
 
     const container = containerRef.current;
     if (!container) return;
@@ -135,6 +139,7 @@ export function Floor3dDemoPanel({
       container,
       tenant,
       baseUrl: getSurfyDemoBaseUrl(),
+      assetsBaseUrl,
       floorId,
       fillParent: true,
       theme: getDemoThemeOptions(themeId),
@@ -157,6 +162,7 @@ export function Floor3dDemoPanel({
     floorId,
     themeId,
     registered,
+    assetsBaseUrl,
     createMountListeners,
     resetOnUnmount,
   ]);

@@ -1,14 +1,17 @@
 /**
  * Client-side URL helpers for the React web demo.
  *
- * Browser → same origin only:
- *   GET  /api/session     → HttpOnly cookie (Surfy JWT stays on server)
+ * Browser → same origin for auth API:
+ *   GET  /api/session     → HttpOnly cookie + assetsOrigin (Surfy host)
  *   *    /proxy/api/v1/…  → unique proxy injects Bearer (optional ?surfyApiOrigin=)
+ *
+ * Public `/assets/*` (fonts, icon CSS) → Surfy host from session `assetsOrigin`
+ * (never `/proxy` — rate-limited and not needed for static files).
  */
 
 import { SURFY_DEMO_PROXY_PATH_PREFIX } from '@surfy/surfy-demo-auth/session';
 
-/** SDK / SurfyClient baseUrl = same-origin proxy prefix (not Surfy host). */
+/** SDK / SurfyClient baseUrl = same-origin proxy prefix (authenticated API only). */
 export function getSurfyDemoBaseUrl(): string {
   if (typeof window !== 'undefined' && window.location?.origin) {
     return `${window.location.origin}${SURFY_DEMO_PROXY_PATH_PREFIX}`;

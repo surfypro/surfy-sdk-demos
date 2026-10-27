@@ -66,5 +66,8 @@ npm-debug.log*
 # Local overrides
 *.local
 
+# Quality agent deposits (errors-only JSON for agents)
+.surfy/
+
 # Added by ggshield
 .cache_ggshield

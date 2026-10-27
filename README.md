@@ -6,7 +6,7 @@ Monorepo containing integration demos for the Surfy SDK.
 
 | App | Description |
 |-----|-------------|
-| `apps/react-web` | React web demo — floor 2D, building 3D, data API, React Native WebView simulator |
+| `apps/react-web` | React web demo — floor 2D, building 3D, platform 3D, data API (API session + proxy) |
 | `apps/demo-server` | Token proxy (local dev server) |
 | `netlify/` | Token + API proxy for Netlify deployment |
 
@@ -14,12 +14,26 @@ Monorepo containing integration demos for the Surfy SDK.
 
 Official guide: [help.surfy.pro — Surfy SDK](https://help.surfy.pro/entities/sdk/).
 
+### WI-429 — Platform demo (`platform-3d`) — Pilotage contexte SDK
+
+In `apps/react-web`, the **sole** public MapLibre surface is **`platform-3d`** → `SurfyPlatformView3dReact` (same entry as product `building/3d-maplibre`).
+
+- **Structure click** → Cuby pathfinding-style look (exploded floors, ground floor) **in the same MapLibre map**.
+- **Host chrome / Pilotage contexte SDK** (sidebar): bâtiments + étages + inject geo are **demo host controls** — they call public hooks (`useBuildings`, `useFloors`, `useSetCurrentZoom` `enterBuilding`/`enterFloor`, `usePositionFromGeo`). They are **not** packaged SDK drawers / product `PlatformStructureBuildingList`.
+- **Position by altitude**: `usePositionFromGeo` only (no calibration-edit API in this tranche).
+- **Host focus**: `useSetCurrentZoom` (`enterBuilding` / `enterFloor`); MapLibre tiles use **browser cache only**.
+- **Offline**: `offlineEnabled` defaults to **`true`** (SWR). Opt out with `false` for network-only.
+- Demo nav: **no** `campus-3d` / `structure-cuby` — `SurfyStructureCubyView3dReact` is **removed** from the public contract → Platform only.
+
+Help pages: [Platform view](https://help.surfy.pro/entities/sdk/platform-campus-3d), [Surfy React Web](https://help.surfy.pro/entities/sdk/surfy-react-web), [3D options](https://help.surfy.pro/entities/sdk/options-3d).
+
 ## Setup
 
 1. Sync the SDK bundle (from the Surfy monorepo):
    ```bash
-   pnpm build:sdk      # in the surfy-sdk worktree
-   pnpm sync:sdk       # in this repo
+   pnpm build:sdk:sync   # in surfy — build + copy into this repo’s packages/surfy-sdk
+   # or: pnpm build:sdk && (cd ../surfy-sdk-demos && pnpm sync:sdk)
+   pnpm build:sdk:watch  # optional — rebuild+sync on src/surfy-sdk changes (keep pnpm dev running here)
    ```
 2. Install dependencies: `pnpm install`
 3. Configure env files from the provided examples:
@@ -35,10 +49,14 @@ Official guide: [help.surfy.pro — Surfy SDK](https://help.surfy.pro/entities/s
 ## Quality & CI
 
 ```bash
-pnpm quality          # lint + build + typecheck
-pnpm quality:full     # + E2E Playwright (credentials required)
-pnpm scan:secrets     # GitGuardian secret scan
+pnpm quality:agent:code   # local / agents — oxlint + tsc (errors-only deposits)
+pnpm quality:agent:ci     # before push/PR — merge-dry main + CI Quality twin
+pnpm quality              # verbose lint + build + typecheck (same as CI Quality job)
+pnpm quality:full         # + E2E Playwright (credentials required)
+pnpm scan:secrets         # GitGuardian secret scan
 ```
+
+Agent-facing checks deposit failures under `.surfy/quality-agent/` — see [docs/dev/quality-agent.md](docs/dev/quality-agent.md).
 
 GitHub Actions runs `quality` on every push and `test:e2e` on every PR/push to `main` (requires secret `SURFY_CONNECTION_STRING`). See [docs/CI.md](docs/CI.md).
 

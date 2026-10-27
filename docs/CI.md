@@ -49,7 +49,9 @@ Les PR depuis un **fork** n’ont pas accès aux secrets : le job E2E est **skip
 Avant merge :
 
 ```bash
-pnpm quality:full   # local, avec apps/demo-server/.env
+pnpm quality:agent:ci   # agents — merge-dry main + gate (errors-only)
+pnpm quality:full       # local verbose + E2E, avec apps/demo-server/.env
+# détail quality agent : docs/dev/quality-agent.md
 ```
 
 Équivalent CI : Quality + E2E (si secret configuré).

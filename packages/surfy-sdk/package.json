@@ -29,12 +29,14 @@
   "peerDependencies": {
     "react": ">=18",
     "react-dom": ">=18",
-    "maplibre-gl": ">=4"
+    "maplibre-gl": ">=4",
+    "three": ">=0.186"
   },
   "peerDependenciesMeta": {
     "react": { "optional": true },
     "react-dom": { "optional": true },
-    "maplibre-gl": { "optional": true }
+    "maplibre-gl": { "optional": true },
+    "three": { "optional": true }
   },
   "files": [
     "index.js",
@@ -47,6 +49,6 @@
   ],
   "surfy": {
     "workspaceAlias": "file:./dist/surfy-sdk",
-    "note": "Until npm publish: pnpm build:sdk then depend on file:../surfy/dist/surfy-sdk (or worktree path). Platform/Campus React entries export from ./react (SurfyPlatformView3dReact, SurfyCampusView3dReact, usePositionFromGeo). Optional peer maplibre-gl is required at runtime for the MapLibre shell (stories/CI may inject createMap mock)."
+    "note": "Until npm publish: pnpm build:sdk then depend on file:../surfy/dist/surfy-sdk (or worktree path). Primary public React map surface: SurfyPlatformView3dReact (./react). SurfyCampusView3dReact / SurfyBuildingLayout3dReact / SurfyFloorLayout3dReact remain exported but deprecated. Hooks: usePositionFromGeo. Optional peers maplibre-gl (MapLibre shell) and three (layout/WC + Cuby 3D — install once; do not rely on a bundled copy) — stories/CI may inject createMap mock."
   }
 }

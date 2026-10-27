@@ -21,6 +21,11 @@
     "scan:secrets": "bash scripts/scan-secrets.sh",
     "quality": "pnpm --filter react-web lint && pnpm --filter react-web build && pnpm --filter demo-server typecheck",
     "quality:full": "pnpm quality && pnpm test:e2e",
+    "quality:agent:tsc": "npx tsx scripts/dev/quality/quality-agent-tsc.ts",
+    "quality:agent:lint": "npx tsx scripts/dev/quality/quality-agent-lint.ts",
+    "quality:agent:code": "npx tsx scripts/dev/quality/quality-agent-code.ts",
+    "quality:agent:gate": "npx tsx scripts/dev/quality/quality-agent-gate.ts",
+    "quality:agent:ci": "npx tsx scripts/dev/quality/quality-agent-ci.ts",
     "check:m2-building-3d-react": "node scripts/check-building-3d-react-m2.mjs"
   },
   "dependencies": {
@@ -29,6 +34,7 @@
   "devDependencies": {
     "@netlify/functions": "^4.2.5",
     "@types/node": "^24.13.2",
-    "esbuild": "^0.25.12"
+    "esbuild": "^0.25.12",
+    "tsx": "^4.23.0"
   }
 }

@@ -7,6 +7,7 @@ import { isRenderedDemoRoom } from '../../../demoLayoutElement';
 import { getDemoProxyBearer } from '../../../demoSession';
 import { getDemoThemeOptions } from '../../../demoThemes';
 import { getSurfyDemoBaseUrl } from '../../../surfyEnv';
+import { useDemoAssetsBaseUrl } from '../../../useDemoAssetsBaseUrl';
 import { ApiSnippetPanel } from '../actions/ApiSnippetPanel';
 import type { DemoSurfaceMode } from '../shared/demoSurfaceMode';
 import { DemoReactFloorHost } from '../shared/DemoReactLayoutHost';
@@ -38,6 +39,7 @@ export function Floor2dDemoPanel({
   const [surfaceMode, setSurfaceMode] = useState<DemoSurfaceMode>('api-js');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const layoutRef = useRef<SurfyLayout | null>(null);
+  const assetsBaseUrl = useDemoAssetsBaseUrl();
   const registered = SurfySdk.isKindRegistered('floor-2d');
 
   const {
@@ -85,7 +87,9 @@ export function Floor2dDemoPanel({
   );
 
   useEffect(() => {
-    if (!active || surfaceMode !== 'api-js' || floorId === undefined || !registered) return;
+    if (!active || surfaceMode !== 'api-js' || floorId === undefined || !registered || !assetsBaseUrl) {
+      return;
+    }
 
     const container = containerRef.current;
     if (!container) return;
@@ -94,6 +98,7 @@ export function Floor2dDemoPanel({
       container,
       tenant,
       baseUrl: getSurfyDemoBaseUrl(),
+      assetsBaseUrl,
       floorId,
       fillParent: true,
       theme: getDemoThemeOptions(themeId),
@@ -115,6 +120,7 @@ export function Floor2dDemoPanel({
     floorId,
     themeId,
     registered,
+    assetsBaseUrl,
     createMountListeners,
     resetOnUnmount,
   ]);

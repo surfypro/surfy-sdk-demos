@@ -3,24 +3,10 @@ export type DemoLocale = 'fr' | 'en';
 const messages = {
   fr: {
     'app.title': 'Démo Surfy SDK',
-    'app.routesHint':
-      'Routes : /api|oauth/react-web|react-native/… Mode API : session HttpOnly + proxy /proxy/api/v1.',
-    'auth.api': 'API (serveur)',
-    'auth.oauth': 'OAuth / Entra',
-    'nav.auth': "Mode d'authentification",
-    'nav.host': 'Hôte de démo',
     'nav.sections': 'Composants SDK',
-    'nav.apiFamilies': 'Familles d’API',
-    'nav.apiComponents': 'API composants',
-    'nav.apiData': 'API data',
-    'workbench.intro':
-      'Mode API : session HttpOnly + proxy /proxy (le JWT Surfy ne quitte pas le serveur).',
     'workbench.loading': 'Chargement des bâtiments…',
     'workbench.tenant': 'Tenant',
-    'workbench.session': 'session API (proxy)',
     'workbench.noFloors': "Ce bâtiment n'a pas d'étage.",
-    'oauth.comingSoon':
-      'Mode OAuth / Entra OBO — à venir. Pour l’instant, utilisez le mode API (session serveur + proxy).',
     'layout.unavailable':
       "Ce kind n'est pas encore enregistré dans le bundle SDK. La section sera activée à la publication.",
     'layout.noEntity': 'Sélectionnez un bâtiment et un étage dans la liste ci-dessus.',
@@ -54,40 +40,31 @@ const messages = {
     'data.result': 'Résultat JSON',
     'platform.ready': 'prêt',
     'platform.loading': 'chargement…',
-    'platform.campusId': 'campus',
     'platform.liveApiNote':
-      'Données live : GetVision / GetBuildingDetail via /proxy (RPC) + liste campus via QueryNode.',
+      'Données live : GetVision / GetBuildingDetail via /proxy (RPC) — stack building/3d-maplibre.',
     'platform.buildingsFromApi': 'Bâtiments (vision API)',
     'platform.noBuildings': 'Aucun bâtiment dans la vision.',
+    'platform.floorsFromDetail': 'Étages (detail hydraté)',
+    'platform.noFloors': 'Aucun étage — sélectionnez un bâtiment d’abord.',
+    'platform.hostChromeNote':
+      'Chrome hôte : listes bâtiments / étages / inject geo pilotent le SDK via hooks publics (pas de drawers produit embarqués).',
     'platform.noGpsHint': 'Pas de GPS — sélection sans vol caméra',
-    'platform.noCampuses': 'Aucun campus',
     'platform.altitudeHint': 'étage estimé → espace',
     'platform.injectAltitude': 'Injecter Position par altitude',
     'platform.lastGeo': 'Dernier résultat geo',
     'platform.events': 'Events',
+    'platform.cubyHydrateError':
+      'Impossible de charger le bâtiment 3D (Cuby). Aucun cube de remplacement — réessayez ou choisissez un autre bâtiment.',
+    'platform.cubyHydrateErrorDetail': 'Détail : {detail}',
     'locale.fr': 'FR',
     'locale.en': 'EN',
   },
   en: {
     'app.title': 'Surfy SDK Demo',
-    'app.routesHint':
-      'Routes: /api|oauth/react-web|react-native/… API mode: HttpOnly session + /proxy/api/v1.',
-    'auth.api': 'API (server)',
-    'auth.oauth': 'OAuth / Entra',
-    'nav.auth': 'Authentication mode',
-    'nav.host': 'Demo host',
     'nav.sections': 'SDK components',
-    'nav.apiFamilies': 'API families',
-    'nav.apiComponents': 'Component API',
-    'nav.apiData': 'Data API',
-    'workbench.intro':
-      'API mode: HttpOnly session + /proxy (Surfy JWT never leaves the server).',
     'workbench.loading': 'Loading buildings…',
     'workbench.tenant': 'Tenant',
-    'workbench.session': 'API session (proxy)',
     'workbench.noFloors': 'This building has no floors.',
-    'oauth.comingSoon':
-      'OAuth / Entra OBO mode — coming soon. For now, use API mode (server session + proxy).',
     'layout.unavailable':
       'This kind is not registered in the SDK bundle yet. The section will activate when published.',
     'layout.noEntity': 'Select a building and floor in the list above.',
@@ -121,17 +98,22 @@ const messages = {
     'data.result': 'JSON result',
     'platform.ready': 'ready',
     'platform.loading': 'loading…',
-    'platform.campusId': 'campus',
     'platform.liveApiNote':
-      'Live data: GetVision / GetBuildingDetail via /proxy (RPC) + campus list via QueryNode.',
+      'Live data: GetVision / GetBuildingDetail via /proxy (RPC) — same stack as building/3d-maplibre.',
     'platform.buildingsFromApi': 'Buildings (vision API)',
     'platform.noBuildings': 'No buildings in vision.',
+    'platform.floorsFromDetail': 'Floors (hydrated detail)',
+    'platform.noFloors': 'No floors — select a building first.',
+    'platform.hostChromeNote':
+      'Host chrome: building / floor lists and inject-geo drive the SDK via public hooks (no packaged product drawers).',
     'platform.noGpsHint': 'No GPS — select without camera fly',
-    'platform.noCampuses': 'No campus',
     'platform.altitudeHint': 'estimated floor → space',
     'platform.injectAltitude': 'Inject Position from altitude',
     'platform.lastGeo': 'Last geo result',
     'platform.events': 'Events',
+    'platform.cubyHydrateError':
+      'Could not load the 3D building (Cuby). No placeholder cube — retry or pick another building.',
+    'platform.cubyHydrateErrorDetail': 'Detail: {detail}',
     'locale.fr': 'FR',
     'locale.en': 'EN',
   },

@@ -13,13 +13,33 @@ Guide pour **développeurs Surfy** et agents Cursor. Objectif : garder les démo
 
 > **Attention** — Ce monorepo **n’utilise pas** l’ESLint Surfy (`@surfy/*`, `eslint:typed`). Les conventions ci-dessous compensent ce gap. Le code **SDK** (`src/surfy-sdk/`, embed Cuby) reste dans le monolithe Surfy et doit passer `pnpm eslint` / `pnpm feature:close:check`.
 
+## Quality agent (local / agents)
+
+Même concept que Surfy alpha (`quality:agent:*`) : **stdout une ligne**, dépôts d’erreurs sous `.surfy/quality-agent/` (gitignored). Détail : [docs/dev/quality-agent.md](dev/quality-agent.md).
+
+```bash
+pnpm quality:agent:code   # après un milestone (oxlint autofix + tsc)
+pnpm quality:agent:ci     # avant push / PR (merge-dry origin/main + gate CI)
+```
+
+| Script | Rôle |
+|--------|------|
+| `quality:agent:tsc` | tsc auth + demo-server + react-web |
+| `quality:agent:lint` | oxlint (autofix par défaut ; `--no-fix` en gate) |
+| `quality:agent:code` | lint + tsc |
+| `quality:agent:gate` | twin job CI Quality (`pnpm quality`) |
+| `quality:agent:ci` | merge `origin/main` + gate |
+
+Sur FAIL → `Read` `.surfy/quality-agent/code.summary.json` (ou `ci.summary.json`) + fichiers liés. Ne pas dump `tsc` / `oxlint` / `pnpm quality` brut dans le chat agent.
+
 ## Commandes à lancer avant PR
 
 Depuis la racine `surfy-sdk-demos` :
 
 ```bash
-pnpm quality          # lint + build react-web + typecheck demo-server
-# équivalent :
+pnpm quality:agent:ci     # agents / local — errors-only
+pnpm quality              # humains / CI — logs complets (lint + build + typecheck)
+# équivalent verbose :
 pnpm --filter react-web lint
 pnpm --filter react-web build
 pnpm --filter demo-server typecheck
@@ -112,7 +132,7 @@ Chaque contrôle démo qui appelle une API SDK doit avoir :
 
 ## Checklist PR (demos)
 
-- [ ] `pnpm quality` vert (lint + build + typecheck serveur)
+- [ ] `pnpm quality:agent:ci` vert (ou `pnpm quality` verbose)
 - [ ] **`pnpm quality:full`** si changement SDK / layout / E2E (inclut `test:e2e` + gate couverture)
 - [ ] CI GitHub verte sur la PR ([docs/CI.md](CI.md))
 - [ ] Manifeste [`sdkFeatureManifest.ts`](../apps/react-web/e2e/sdkFeatureManifest.ts) à jour pour toute nouvelle API SDK
@@ -151,4 +171,5 @@ Règles Cursor monolithe : `.cursor/rules/sonar-coding-style.mdc`, `sonar-local.
 1. Découper layout demos en panels 2D / 3D séparés — **fait** (`Floor2dDemoPanel`, `Building3dDemoPanel`, `shared/`).
 2. Types SDK importés depuis `@surfy/surfy-sdk` — **fait** (plus de doublons locaux).
 3. Script racine `pnpm quality` — **fait**.
-4. Renforcer oxlint (règles hooks / unused / eqeqeq) — **fait** (`.oxlintrc.json`) ; type-aware (`oxlint-tsgolint`) en option ultérieure.
+4. Quality agent (`quality:agent:*`, errors-only) — **fait** ([docs/dev/quality-agent.md](dev/quality-agent.md)).
+5. Renforcer oxlint (règles hooks / unused / eqeqeq) — **fait** (`.oxlintrc.json`) ; type-aware (`oxlint-tsgolint`) en option ultérieure.

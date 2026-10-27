@@ -17,6 +17,7 @@ import { getDemoProxyBearer } from '../../../demoSession';
 import { getDemoThemeOptions } from '../../../demoThemes';
 import type { DemoFloor } from '../../../fetchDemoCatalog';
 import { getSurfyDemoBaseUrl } from '../../../surfyEnv';
+import { useDemoAssetsBaseUrl } from '../../../useDemoAssetsBaseUrl';
 import { ApiSnippetPanel } from '../actions/ApiSnippetPanel';
 import type { DemoSurfaceMode } from '../shared/demoSurfaceMode';
 import { DemoReactBuildingHost } from '../shared/DemoReactLayoutHost';
@@ -63,6 +64,7 @@ export function Building3dDemoPanel({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const layoutRef = useRef<SurfyLayout | null>(null);
   const reactLayoutRef = useRef<ISurfyBuilding3dLayoutApi | null>(null);
+  const assetsBaseUrl = useDemoAssetsBaseUrl();
   const registered = SurfySdk.isKindRegistered('building-3d');
 
   const initialLayout3dOptions = useMemo(
@@ -166,7 +168,9 @@ export function Building3dDemoPanel({
   const reactListeners = useMemo(() => createMountListeners(), [createMountListeners]);
 
   useEffect(() => {
-    if (!active || surfaceMode !== 'api-js' || buildingId === undefined || !registered) return;
+    if (!active || surfaceMode !== 'api-js' || buildingId === undefined || !registered || !assetsBaseUrl) {
+      return;
+    }
 
     const container = containerRef.current;
     if (!container) return;
@@ -175,6 +179,7 @@ export function Building3dDemoPanel({
       container,
       tenant,
       baseUrl: getSurfyDemoBaseUrl(),
+      assetsBaseUrl,
       buildingId,
       fillParent: true,
       theme: getDemoThemeOptions(themeId),
@@ -198,6 +203,7 @@ export function Building3dDemoPanel({
     initialLayout3dOptions,
     themeId,
     registered,
+    assetsBaseUrl,
     createMountListeners,
     resetOnUnmount,
   ]);
