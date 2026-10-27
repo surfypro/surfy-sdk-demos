@@ -1,0 +1,10 @@
+---
+description: Commit and push to origin without pilot confirmation (sdk demos only)
+alwaysApply: true
+---
+
+# Git autonomy — surfy-sdk-demos
+
+For this repo only, agents **may commit and push / sync with `origin` without waiting for pilot validation**.
+
+Still: no force-push to main, no `--no-verify`, no secrets in commits. Surfy monorepo (`surfy/`) keeps the stricter ask-first commit rule.

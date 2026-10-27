@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { SURFY_SDK_MIN_HOST_VERSION, SURFY_SDK_VERSION } from '@surfy/surfy-sdk';
 import {
   SurfyPlatformView3dReact,
   useBuildings,
@@ -13,7 +14,12 @@ import { ensureDemoSession, getDemoProxyBearer } from '../../demoSession';
 import { getSurfyDemoBaseUrl } from '../../surfyEnv';
 import { useDemoAssetsBaseUrl } from '../../useDemoAssetsBaseUrl';
 import { useDemoI18n } from '../../i18n/DemoI18nProvider';
-import { DEMO_PLATFORM_GEO_INJECT } from './platformDemo.fixtures';
+import {
+  DEMO_PLATFORM_BUILDING_DETAIL_FIXTURE,
+  DEMO_PLATFORM_GEO_INJECT,
+  DEMO_PLATFORM_VISION_FIXTURE,
+} from './platformDemo.fixtures';
+import { compareDemoSurfyHostVersion } from './compareDemoSurfyHostVersion.helper';
 
 interface PlatformCampusDemoPanelProps {
   readonly active: boolean;
@@ -242,6 +248,15 @@ function PlatformFloorsList({ mountNode }: PlatformHostListProps) {
  * Sidebar lists = **host chrome** via public hooks (`useBuildings` / `useFloors` /
  * `useSetCurrentZoom` / `usePositionFromGeo`) — not product PlatformStructureBuildingList.
  */
+type HostCompatState =
+  | { readonly status: 'pending' }
+  | { readonly status: 'live'; readonly hostVersion: string }
+  | {
+      readonly status: 'fixtures';
+      readonly hostVersion: string;
+      readonly reason: string;
+    };
+
 export function PlatformCampusDemoPanel({
   active,
   tenant: tenantProp,
@@ -251,6 +266,7 @@ export function PlatformCampusDemoPanel({
   const { t } = useDemoI18n();
   const [tenant, setTenant] = useState(tenantProp ?? '');
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const [hostCompat, setHostCompat] = useState<HostCompatState>({ status: 'pending' });
   const [ready, setReady] = useState(false);
   const [log, setLog] = useState<string[]>([]);
   const [buildingsSlot, setBuildingsSlot] = useState<HTMLElement | null>(null);
@@ -304,9 +320,62 @@ export function PlatformCampusDemoPanel({
     };
   }, [tenantProp]);
 
+  useEffect(() => {
+    if (!tenant) {
+      setHostCompat({ status: 'pending' });
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token = await getDemoProxyBearer();
+        const response = await fetch(`${getSurfyDemoBaseUrl()}/api/v1/configuration/config`, {
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${token}`,
+            'x-tenant': tenant,
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`configuration ${response.status}`);
+        }
+        const payload = (await response.json()) as { version?: string };
+        const hostVersion = payload.version?.trim() || 'unknown';
+        const cmp = compareDemoSurfyHostVersion(hostVersion, SURFY_SDK_MIN_HOST_VERSION);
+        if (cancelled) return;
+        if (cmp == null || cmp < 0) {
+          setHostCompat({
+            status: 'fixtures',
+            hostVersion,
+            reason: t('platform.hostVersionIncompatible', {
+              host: hostVersion,
+              min: SURFY_SDK_MIN_HOST_VERSION,
+              sdk: SURFY_SDK_VERSION,
+            }),
+          });
+          return;
+        }
+        setHostCompat({ status: 'live', hostVersion });
+      } catch (err: unknown) {
+        if (cancelled) return;
+        const detail = err instanceof Error ? err.message : String(err);
+        setHostCompat({
+          status: 'fixtures',
+          hostVersion: 'unknown',
+          reason: t('platform.hostVersionCheckFailed', { detail }),
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tenant, t]);
+
   const push = useCallback((line: string) => {
     setLog((prev) => [line, ...prev].slice(0, 12));
   }, []);
+
+  const useFixtures = hostCompat.status === 'fixtures';
 
   const commonProps = useMemo(
     () => ({
@@ -314,6 +383,12 @@ export function PlatformCampusDemoPanel({
       baseUrl: getSurfyDemoBaseUrl(),
       assetsBaseUrl,
       getAccessToken: () => getDemoProxyBearer(),
+      ...(useFixtures
+        ? {
+            fixtureVision: DEMO_PLATFORM_VISION_FIXTURE,
+            fixtureBuildingDetail: DEMO_PLATFORM_BUILDING_DETAIL_FIXTURE,
+          }
+        : {}),
       style: { width: '100%', height: '100%', minHeight: 420 } as const,
       onReady: () => {
         setReady(true);
@@ -322,14 +397,14 @@ export function PlatformCampusDemoPanel({
       onBuildingChange: (buildingId: number) => push(`onBuildingChange(${buildingId})`),
       onFloorChange: (floorId: number) => push(`onFloorChange(${floorId})`),
     }),
-    [push, tenant, assetsBaseUrl],
+    [push, tenant, assetsBaseUrl, useFixtures],
   );
 
   if (!active) {
     return null;
   }
 
-  const canMount = Boolean(tenant && assetsBaseUrl);
+  const canMount = Boolean(tenant && assetsBaseUrl && hostCompat.status !== 'pending');
 
   const overlayChildren = (
     <div className="demo-platform-overlay">
@@ -375,7 +450,26 @@ export function PlatformCampusDemoPanel({
               data-testid="demo-platform-floors-slot"
               className="demo-platform-floors-slot"
             />
-            <p className="demo-section__description">{t('platform.liveApiNote')}</p>
+            <p className="demo-section__description">
+              {useFixtures ? t('platform.fixturesNote') : t('platform.liveApiNote')}
+            </p>
+            {hostCompat.status === 'fixtures' ? (
+              <p
+                className="demo-catalog-error"
+                role="status"
+                data-testid="demo-platform-host-compat"
+              >
+                {hostCompat.reason}
+              </p>
+            ) : null}
+            {hostCompat.status === 'live' ? (
+              <p className="demo-section__tag" data-testid="demo-platform-host-compat">
+                {t('platform.hostVersionOk', {
+                  host: hostCompat.hostVersion,
+                  min: SURFY_SDK_MIN_HOST_VERSION,
+                })}
+              </p>
+            ) : null}
             {cubyHydrateError ? (
               <p
                 className="demo-catalog-error"
@@ -405,7 +499,10 @@ export function PlatformCampusDemoPanel({
               ref={setMapHostEl}
             >
               {canMount ? (
-                <SurfyPlatformView3dReact key={`platform-${tenant}`} {...commonProps}>
+                <SurfyPlatformView3dReact
+                  key={`platform-${tenant}-${useFixtures ? 'fx' : 'live'}`}
+                  {...commonProps}
+                >
                   {overlayChildren}
                 </SurfyPlatformView3dReact>
               ) : null}

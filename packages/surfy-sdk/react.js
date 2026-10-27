@@ -134445,9 +134445,28 @@ async function fetchAndSetPublicMasterData(companyName, options = {}) {
 	}
 }
 //#endregion
+//#region src/version.json
+var version$1 = {
+	"major": 3,
+	"minor": 5,
+	"build": 65
+};
+//#endregion
+//#region src/back/Tracking/version.ts
+function getAppVersion() {
+	const { major, minor, build } = version$1;
+	return `${major}.${minor}.${build}`;
+}
+var appVersion = getAppVersion();
+//#endregion
 //#region src/surfy-sdk/constants.ts
 /** Published SDK semver — bump on public API changes. */
 var SURFY_SDK_VERSION = "0.3.0";
+/**
+* Minimum Surfy host app version (`version.json` → `major.minor.build`) this SDK build requires.
+* Equals the Surfy version at SDK build time — host must be ≥ this (authenticated `/api/v1/configuration/config`).
+*/
+var SURFY_SDK_MIN_HOST_VERSION = appVersion;
 var LAYOUT_FLOOR_DATA_ROUTE = "/api/v1/layout/floor/data";
 var LAYOUT_BUILDING_DATA_ROUTE = "/api/v1/layout/buildings/data";
 //#endregion
@@ -188062,6 +188081,67 @@ function MapLibreShell(props) {
 	});
 }
 //#endregion
+//#region src/back/Api/Configuration/api.configuration.routes.ts
+function getApiConfigurationRoute(r) {
+	return getApiV1Route(`${apiRoutes.configuration}${r}`);
+}
+//#endregion
+//#region src/surfy-sdk/rpc/assertSurfyHostVersionCompatible.helper.ts
+/**
+* Authenticated Surfy host handshake — compares host `version` (from version.json)
+* to the minimum Surfy app version this SDK build requires.
+*/
+/** Parse `major.minor.build` (Surfy version.json shape). Invalid → null. */
+function parseSurfyAppVersion(raw) {
+	const trimmed = raw?.trim();
+	if (!trimmed) return null;
+	const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(trimmed);
+	if (!match) return null;
+	return {
+		major: Number(match[1]),
+		minor: Number(match[2]),
+		build: Number(match[3])
+	};
+}
+/** Compare two Surfy app versions: negative if a < b, 0 if equal, positive if a > b. */
+function compareSurfyAppVersion(a, b) {
+	if (a.major !== b.major) return a.major - b.major;
+	if (a.minor !== b.minor) return a.minor - b.minor;
+	return a.build - b.build;
+}
+function assertHostVersionMeetsMinimum(args) {
+	const minRaw = args.minHostVersion ?? SURFY_SDK_MIN_HOST_VERSION;
+	const host = parseSurfyAppVersion(args.hostVersion);
+	const min = parseSurfyAppVersion(minRaw);
+	if (!min) throw createSurfySdkError("SDK_CONFIG", `SDK misconfigured: invalid SURFY_SDK_MIN_HOST_VERSION "${minRaw}"`);
+	if (!host) throw createSurfySdkError("SDK_CONFIG", `Surfy host version "${args.hostVersion || "missing"}" is not major.minor.build — cannot verify compatibility with SDK ${SURFY_SDK_VERSION} (requires Surfy ≥ ${minRaw}).`);
+	if (compareSurfyAppVersion(host, min) >= 0) return;
+	throw createSurfySdkError("SDK_CONFIG", `Surfy host ${args.hostVersion} is incompatible with SDK ${SURFY_SDK_VERSION} (requires Surfy ≥ ${minRaw}). Deploy a newer Surfy (version.json), then retry.`);
+}
+/**
+* GET `/api/v1/configuration/config` (authenticated) and assert host version compatibility.
+*/
+async function fetchAndAssertSurfyHostVersionCompatible(auth) {
+	const url = `${normalizeSurfyBaseUrl(auth.baseUrl)}${getApiConfigurationRoute("/config")}`;
+	const headers = await buildSurfyApiHeaders(auth);
+	let response;
+	try {
+		response = await fetch(url, {
+			method: "GET",
+			headers
+		});
+	} catch (error) {
+		throw createSurfySdkError("NETWORK", `Surfy compatibility check failed: ${error instanceof Error ? error.message : "network error"}`);
+	}
+	if (!response.ok) throw createSurfyHttpError(`Surfy compatibility check failed (${response.status})`, response.status);
+	const contentType = response.headers.get("content-type") ?? "";
+	if (!contentType.includes("application/json")) throw createSurfySdkError("SDK_CONFIG", `Surfy compatibility check got ${contentType || "unknown content-type"} instead of JSON — host may be misconfigured.`);
+	const payload = await response.json();
+	const version = typeof payload.version === "string" ? payload.version.trim() : "";
+	assertHostVersionMeetsMinimum({ hostVersion: version });
+	return { version };
+}
+//#endregion
 //#region src/surfy-sdk/rpc/sdkBuilding.mapper.ts
 var DEFAULT_TRANSFORM$1 = {
 	translate: {
@@ -189269,36 +189349,42 @@ function PlatformCampusHydrateGate(props) {
 	]);
 	useEffect(() => {
 		let cancelled = false;
-		hydratePlatformSession({
-			store: jotaiStore,
-			tenant: resolvedTenant,
-			campusId,
-			fixtureVision,
-			fixtureBuildingDetail,
-			offlineEnabled,
-			offlineStore: resolvedOfflineStore,
-			loadVision: effectiveLoadVision,
-			loadBuildingDetail: effectiveLoadBuildingDetail
-		}).then((result) => {
-			if (cancelled) return;
-			setOfflineCacheHit(result.servedFromStaleOnError);
-			if (offlineEnabled) logSdkOfflineHydrateOk({
-				tenant: resolvedTenant,
-				servedFromStaleOnError: result.servedFromStaleOnError,
-				mdPersisted: result.mdPersisted,
-				buildingCount: result.vision.buildings.length
-			});
-		}).catch((err) => {
-			if (cancelled) return;
-			if (offlineEnabled) logSdkOfflineFailure({
-				phase: "hydrate",
-				tenant: resolvedTenant,
-				offlineEnabled,
-				storeKind: offlineStoreKind,
-				error: err
-			});
-			setHydrateError(err instanceof Error ? err : new Error(String(err)));
-		});
+		const needsLiveHost = (effectiveLoadVision != null || effectiveLoadBuildingDetail != null) && fixtureVision == null;
+		(async () => {
+			try {
+				if (needsLiveHost) await fetchAndAssertSurfyHostVersionCompatible(liveAuth);
+				if (cancelled) return;
+				const result = await hydratePlatformSession({
+					store: jotaiStore,
+					tenant: resolvedTenant,
+					campusId,
+					fixtureVision,
+					fixtureBuildingDetail,
+					offlineEnabled,
+					offlineStore: resolvedOfflineStore,
+					loadVision: effectiveLoadVision,
+					loadBuildingDetail: effectiveLoadBuildingDetail
+				});
+				if (cancelled) return;
+				setOfflineCacheHit(result.servedFromStaleOnError);
+				if (offlineEnabled) logSdkOfflineHydrateOk({
+					tenant: resolvedTenant,
+					servedFromStaleOnError: result.servedFromStaleOnError,
+					mdPersisted: result.mdPersisted,
+					buildingCount: result.vision.buildings.length
+				});
+			} catch (err) {
+				if (cancelled) return;
+				if (offlineEnabled) logSdkOfflineFailure({
+					phase: "hydrate",
+					tenant: resolvedTenant,
+					offlineEnabled,
+					storeKind: offlineStoreKind,
+					error: err
+				});
+				setHydrateError(err instanceof Error ? err : new Error(String(err)));
+			}
+		})();
 		return () => {
 			cancelled = true;
 		};
@@ -189312,7 +189398,8 @@ function PlatformCampusHydrateGate(props) {
 		resolvedOfflineStore,
 		offlineStoreKind,
 		effectiveLoadVision,
-		effectiveLoadBuildingDetail
+		effectiveLoadBuildingDetail,
+		liveAuth
 	]);
 	if (hydrateError) throw hydrateError;
 	if (!ready) return /* @__PURE__ */ jsx(SuspenseReadyFallback, {

@@ -3,3 +3,5 @@ packages:
   - packages/*
 allowBuilds:
   esbuild: false
+  netlify-cli: true
+  unix-dgram: false

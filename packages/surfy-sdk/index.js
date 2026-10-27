@@ -49,9 +49,28 @@ var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require
 	throw Error("Calling `require` for \"" + x + "\" in an environment that doesn't expose the `require` function. See https://rolldown.rs/in-depth/bundling-cjs#require-external-modules for more details.");
 });
 //#endregion
+//#region src/version.json
+var version$1 = {
+	"major": 3,
+	"minor": 5,
+	"build": 65
+};
+//#endregion
+//#region src/back/Tracking/version.ts
+function getAppVersion() {
+	const { major, minor, build } = version$1;
+	return `${major}.${minor}.${build}`;
+}
+var appVersion = getAppVersion();
+//#endregion
 //#region src/surfy-sdk/constants.ts
 /** Published SDK semver — bump on public API changes. */
 var SURFY_SDK_VERSION = "0.3.0";
+/**
+* Minimum Surfy host app version (`version.json` → `major.minor.build`) this SDK build requires.
+* Equals the Surfy version at SDK build time — host must be ≥ this (authenticated `/api/v1/configuration/config`).
+*/
+var SURFY_SDK_MIN_HOST_VERSION = appVersion;
 /** 2D floor layout Web Component. */
 var SURFY_FLOOR_LAYOUT_2D_TAG = "surfy-floor-layout-2d";
 /** 3D building layout Web Component — CubyV2 (multi-floor or single-floor focus). */
@@ -142596,4 +142615,4 @@ function listSemanticParityCapabilities() {
 //#region src/surfy-sdk/index.ts
 registerSurfyLayoutElements();
 //#endregion
-export { SURFY_BUILDING_LAYOUT_3D_TAG, SURFY_ENTITIES_ROUTE, SURFY_FLOOR_LAYOUT_2D_TAG, SURFY_FLOOR_LAYOUT_3D_TAG, SURFY_SDK_ERROR_CODES, SURFY_SDK_VERSION, SURFY_SEMANTIC_PARITY_MATRIX, SurfyBuildingLayout3dElementImpl, SurfyClient, SurfyFloorLayout2dElementImpl, SurfyFloorLayout3dElementImpl, SurfySdk, createFilter, fetchBuildingLayoutData, fetchFloorLayoutData, listSemanticParityCapabilities, registerSurfyLayoutElements };
+export { SURFY_BUILDING_LAYOUT_3D_TAG, SURFY_ENTITIES_ROUTE, SURFY_FLOOR_LAYOUT_2D_TAG, SURFY_FLOOR_LAYOUT_3D_TAG, SURFY_SDK_ERROR_CODES, SURFY_SDK_MIN_HOST_VERSION, SURFY_SDK_VERSION, SURFY_SEMANTIC_PARITY_MATRIX, SurfyBuildingLayout3dElementImpl, SurfyClient, SurfyFloorLayout2dElementImpl, SurfyFloorLayout3dElementImpl, SurfySdk, createFilter, fetchBuildingLayoutData, fetchFloorLayoutData, listSemanticParityCapabilities, registerSurfyLayoutElements };

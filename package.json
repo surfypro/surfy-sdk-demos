@@ -11,6 +11,9 @@
     "build:react": "pnpm --filter react-web build",
     "build:functions": "bash scripts/build-netlify-functions.sh",
     "build:netlify": "bash scripts/build-netlify.sh",
+    "netlify": "netlify",
+    "netlify:status": "netlify status",
+    "netlify:logs": "netlify logs:function",
     "serve:production": "node scripts/serve-production.mjs",
     "docker:build": "docker compose build",
     "docker:up": "docker compose up --build",
@@ -35,6 +38,7 @@
     "@netlify/functions": "^4.2.5",
     "@types/node": "^24.13.2",
     "esbuild": "^0.25.12",
+    "netlify-cli": "^27.14.2",
     "tsx": "^4.23.0"
   }
 }

@@ -3388,6 +3388,11 @@ export declare class SurfyClient {
 }
 /** Published SDK semver — bump on public API changes. */
 export declare const SURFY_SDK_VERSION = "0.3.0";
+/**
+ * Minimum Surfy host app version (`version.json` → `major.minor.build`) this SDK build requires.
+ * Equals the Surfy version at SDK build time — host must be ≥ this (authenticated `/api/v1/configuration/config`).
+ */
+export declare const SURFY_SDK_MIN_HOST_VERSION: string;
 /** 2D floor layout Web Component. */
 export declare const SURFY_FLOOR_LAYOUT_2D_TAG = "surfy-floor-layout-2d";
 /** 3D building layout Web Component — CubyV2 (multi-floor or single-floor focus). */

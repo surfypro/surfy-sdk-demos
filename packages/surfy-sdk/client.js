@@ -7,6 +7,20 @@ function createFilter(operator, column, value) {
 	};
 }
 //#endregion
+//#region src/version.json
+var version = {
+	"major": 3,
+	"minor": 5,
+	"build": 65
+};
+//#endregion
+//#region src/back/Tracking/version.ts
+function getAppVersion() {
+	const { major, minor, build } = version;
+	return `${major}.${minor}.${build}`;
+}
+getAppVersion();
+//#endregion
 //#region src/surfy-sdk/constants.ts
 /** Published SDK semver — bump on public API changes. */
 var SURFY_SDK_VERSION = "0.3.0";

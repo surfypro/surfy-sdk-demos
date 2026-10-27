@@ -42,6 +42,13 @@ const messages = {
     'platform.loading': 'chargement…',
     'platform.liveApiNote':
       'Données live : GetVision / GetBuildingDetail via /proxy (RPC) — stack building/3d-maplibre.',
+    'platform.fixturesNote':
+      'Mode fixtures (host Surfy trop ancien ou check version KO) — MapLibre/Cuby restent démontrables.',
+    'platform.hostVersionOk': 'Host Surfy {host} ≥ {min} — API live.',
+    'platform.hostVersionIncompatible':
+      'Host Surfy {host} < {min} requis par SDK {sdk} — bascule fixtures. Redéployer Surfy (version.json) puis réessayer.',
+    'platform.hostVersionCheckFailed':
+      'Check version Surfy impossible ({detail}) — bascule fixtures.',
     'platform.buildingsFromApi': 'Bâtiments (vision API)',
     'platform.noBuildings': 'Aucun bâtiment dans la vision.',
     'platform.floorsFromDetail': 'Étages (detail hydraté)',
@@ -100,6 +107,13 @@ const messages = {
     'platform.loading': 'loading…',
     'platform.liveApiNote':
       'Live data: GetVision / GetBuildingDetail via /proxy (RPC) — same stack as building/3d-maplibre.',
+    'platform.fixturesNote':
+      'Fixture mode (Surfy host too old or version check failed) — MapLibre/Cuby still demonstrable.',
+    'platform.hostVersionOk': 'Surfy host {host} ≥ {min} — live API.',
+    'platform.hostVersionIncompatible':
+      'Surfy host {host} < {min} required by SDK {sdk} — using fixtures. Redeploy Surfy (version.json) then retry.',
+    'platform.hostVersionCheckFailed':
+      'Surfy version check failed ({detail}) — using fixtures.',
     'platform.buildingsFromApi': 'Buildings (vision API)',
     'platform.noBuildings': 'No buildings in vision.',
     'platform.floorsFromDetail': 'Floors (hydrated detail)',
