@@ -5,7 +5,9 @@ Deux numéros de version coexistent :
 | Artefact | Où | Règle |
 |----------|-----|--------|
 | **App démo** | `apps/react-web/src/demoVersion.ts` (`DEMO_APP_VERSION`), racine `package.json` | Semver indépendant — bump à chaque release démo (UI, E2E, docs). |
-| **Bundle SDK** | `packages/surfy-sdk/SDK_VERSION` (généré par `pnpm sync:sdk`) | Copie de `SURFY_SDK_VERSION` du monolithe Surfy (`src/surfy-sdk/constants.ts`). |
+| **Bundle SDK** | `packages/surfy-sdk/package.json` + `SDK_VERSION` (généré par `pnpm sync:sdk`) | Copie de `SURFY_SDK_VERSION` du monolithe Surfy (`src/surfy-sdk/constants.ts`). |
+
+**UI topbar** (`data-testid="demo-version-line"`) : affiche la version **SDK** (`SDK_BUNDLE_VERSION` ← `@surfy/surfy-sdk/package.json`), pas `DEMO_APP_VERSION`, pour rester alignée avec la lib syncée.
 
 ## Release démo
 

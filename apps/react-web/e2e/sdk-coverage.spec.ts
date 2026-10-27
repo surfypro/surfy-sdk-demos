@@ -29,7 +29,12 @@ test.describe('SDK feature coverage (manifest)', () => {
           await page.goto(DEFAULT_DEMO_URL);
           const meta = page.getByTestId('demo-sdk-meta');
           await expect(meta).toHaveAttribute('data-sdk-version', /^\d+\.\d+\.\d+/);
-          await expect(page.getByTestId('demo-version-line')).toContainText(/Demo v\d+/);
+          const sdkVersion = await meta.getAttribute('data-sdk-version');
+          await expect(page.getByTestId('demo-version-line')).toHaveText(`v${sdkVersion}`);
+          await expect(page.getByTestId('demo-version-line')).toHaveAttribute(
+            'data-sdk-version',
+            sdkVersion ?? ''
+          );
           break;
         }
         case 'SurfySdk.tagForKind': {

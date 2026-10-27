@@ -7,9 +7,9 @@ import { DemoThemeProvider } from './DemoThemeContext';
 import { DemoThemeSwitcher } from './DemoThemeSwitcher';
 import { DemoSdkMeta } from './DemoSdkMeta';
 import { DemoWorkbench } from './DemoWorkbench';
-import { DEMO_APP_VERSION } from './demoVersion';
 import { DemoI18nProvider, useDemoI18n } from './i18n/DemoI18nProvider';
 import { DemoLocaleSwitcher } from './i18n/DemoLocaleSwitcher';
+import { SDK_BUNDLE_VERSION } from './sdkBundleVersion';
 
 function DemoAppShell() {
   const { t } = useDemoI18n();
@@ -28,8 +28,13 @@ function DemoAppShell() {
       <header className="page__header" data-testid="demo-topbar">
         <div className="page__header-brand">
           <h1>{t('app.title')}</h1>
-          <span className="page__version" data-testid="demo-version-line">
-            v{DEMO_APP_VERSION}
+          <span
+            className="page__version"
+            data-testid="demo-version-line"
+            data-sdk-version={SDK_BUNDLE_VERSION}
+            title={`@surfy/surfy-sdk ${SDK_BUNDLE_VERSION}`}
+          >
+            v{SDK_BUNDLE_VERSION}
           </span>
           {showWcSdkMeta ? <DemoSdkMeta /> : null}
         </div>
