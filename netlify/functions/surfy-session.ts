@@ -63,6 +63,8 @@ export const handler: Handler = async (event) => {
       body: JSON.stringify({
         tenant: authEnv.clientId,
         authMode: 'api',
+        /** Surfy host for public `/assets/*` (fonts) — not the demo `/proxy`. */
+        assetsOrigin: authEnv.baseUrl.replace(/\/$/, ''),
         proxyBearer: SURFY_DEMO_PROXY_BEARER,
       }),
     };
