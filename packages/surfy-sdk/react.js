@@ -1116,6 +1116,17 @@ function toVisionSummaryFromMassing(building) {
 	};
 }
 /**
+* Resolve one building for Cuby layout hydrate — vision first, then massing stub.
+* Approach preload can run while `buildingsRef` (vision) is still empty; instances
+* already come from massing, so hydrate must not silently no-op.
+*/
+function resolveVisionBuildingSummaryForHydrate(buildingId, visionBuildings, massing) {
+	const fromVision = visionBuildings.find((b) => b.id === buildingId);
+	if (fromVision) return fromVision;
+	const fromMassing = massing?.buildings.find((b) => b.id === buildingId);
+	return fromMassing == null ? void 0 : toVisionSummaryFromMassing(fromMassing);
+}
+/**
 * When massing is loaded, return only massing buildings (MapLibre enable set),
 * preferring vision rows for richer footprints when present. Order follows massing.
 * When massing is null (Cuby-only / not yet loaded), return vision unchanged.
@@ -23369,7 +23380,11 @@ var jsonTranslationsFiles = {
 		"RoomsBulkEditSelectDimensions.multipleValues": "Valeurs multiples",
 		"RoomSegmentRoomsList.title": "Les espaces attachés à ce segment",
 		"RoomTooltip.roomWorkplaceAffectations": "Affectations des postes de travail",
-		"RoomTypeGroupHelpTitle.exclude": "Le groupement de type d'espaces %{name} est de type exclusion. Il regroupe tous les espaces à l'exception des typologies d'espaces suivantes :",
+		"RoomTypeGroupHelpTitle.columnRoomType": "Typologie",
+		"RoomTypeGroupHelpTitle.columnShare": "%",
+		"RoomTypeGroupHelpTitle.columnSurface": "Surface",
+		"RoomTypeGroupHelpTitle.columnWorkplaces": "Postes",
+		"RoomTypeGroupHelpTitle.exclude": "Le groupement de type d'espaces %{name} est de type exclusion. Il regroupe les typologies d'espaces disponibles suivantes :",
 		"RoomTypeGroupHelpTitle.include": "Le groupement de type d'espaces %{name} regroupe les typologies d'espaces suivantes :",
 		"RoomTypeGroupLabel.exclude.tooltip": "Le groupe de typologie d'espace exclue les types d'espaces associés",
 		"RoomTypeGroupMapFilter.Empty": "Il n'y a aucun groupe de type d'espace associé aux espaces via les type d'espaces, vous pouvez en ajouter en modifiant un groupe de type d'espace et en y ajoutant associant un type d'espace, puis vous pourrez contrôler leur affichage depuis cette section",
@@ -27712,7 +27727,11 @@ var jsonTranslationsFiles = {
 		"RoomsBulkEditSelectDimensions.multipleValues": "Multiple values",
 		"RoomSegmentRoomsList.title": "The spaces attached to this segment",
 		"RoomTooltip.roomWorkplaceAffectations": "Workstation assignments",
-		"RoomTypeGroupHelpTitle.exclude": "The %{name} space type grouping is of type exclusion. It groups all spaces except the following space typologies:",
+		"RoomTypeGroupHelpTitle.columnRoomType": "Typology",
+		"RoomTypeGroupHelpTitle.columnShare": "%",
+		"RoomTypeGroupHelpTitle.columnSurface": "Area",
+		"RoomTypeGroupHelpTitle.columnWorkplaces": "Positions",
+		"RoomTypeGroupHelpTitle.exclude": "The space type grouping %{name} is of type exclusion. It groups the following available space types:",
 		"RoomTypeGroupHelpTitle.include": "The %{name} space type grouping groups the following space typologies:",
 		"RoomTypeGroupLabel.exclude.tooltip": "The space typology group excludes associated space types",
 		"RoomTypeGroupMapFilter.Empty": "There is no space type group associated with spaces via space types, you can add more by editing a space type group and adding associating a space type to it, then you can control their display from this section",
@@ -32055,7 +32074,11 @@ var jsonTranslationsFiles = {
 		"RoomsBulkEditSelectDimensions.multipleValues": "Valores múltiples",
 		"RoomSegmentRoomsList.title": "Los espacios adjuntos a este segmento.",
 		"RoomTooltip.roomWorkplaceAffectations": "Asignaciones de estaciones de trabajo",
-		"RoomTypeGroupHelpTitle.exclude": "La agrupación de tipos de espacio %{name} es de tipo de exclusión. Reúne todos los espacios a excepción de las siguientes tipologías de espacios:",
+		"RoomTypeGroupHelpTitle.columnRoomType": "Tipología",
+		"RoomTypeGroupHelpTitle.columnShare": "%",
+		"RoomTypeGroupHelpTitle.columnSurface": "superficie",
+		"RoomTypeGroupHelpTitle.columnWorkplaces": "Puestos",
+		"RoomTypeGroupHelpTitle.exclude": "La agrupación de tipos de espacio %{name} es de tipo exclusión. Agrupa los siguientes tipos de espacio disponibles:",
 		"RoomTypeGroupHelpTitle.include": "La agrupación de tipos de espacio %{name} reúne las siguientes tipologías de espacio:",
 		"RoomTypeGroupLabel.exclude.tooltip": "El grupo de tipología de espacio excluye los tipos de espacio asociados.",
 		"RoomTypeGroupMapFilter.Empty": "No hay ningún grupo de tipo de espacio asociado con espacios a través de tipos de espacio, puede agregar más editando un grupo de tipo de espacio y agregándole un tipo de espacio asociado, luego puede controlar su visualización desde esta sección",
@@ -36398,7 +36421,11 @@ var jsonTranslationsFiles = {
 		"RoomsBulkEditSelectDimensions.multipleValues": "Valori di cambio",
 		"RoomSegmentRoomsList.title": "Gli spazi allegati a questo segmento",
 		"RoomTooltip.roomWorkplaceAffectations": "Compiti della postazione di lavoro",
-		"RoomTypeGroupHelpTitle.exclude": "Il tipo di spazio raggruppato %{name} è di tipo esclusione. Riunisce tutti gli spazi ad eccezione delle seguenti tipologie di spazi:",
+		"RoomTypeGroupHelpTitle.columnRoomType": "Tipologia",
+		"RoomTypeGroupHelpTitle.columnShare": "%",
+		"RoomTypeGroupHelpTitle.columnSurface": "La zona",
+		"RoomTypeGroupHelpTitle.columnWorkplaces": "Posizioni",
+		"RoomTypeGroupHelpTitle.exclude": "Il raggruppamento di tipi di spazio %{name} è di tipo esclusione. Raggruppa i seguenti tipi di spazio disponibili:",
 		"RoomTypeGroupHelpTitle.include": "Il raggruppamento di tipi di spazio %{name} riunisce le seguenti tipologie di spazio:",
 		"RoomTypeGroupLabel.exclude.tooltip": "Il gruppo di tipologie di spazio esclude i tipi di spazio associati",
 		"RoomTypeGroupMapFilter.Empty": "Non esiste alcun gruppo di tipi di spazio associato agli spazi tramite i tipi di spazio, puoi aggiungerne altri modificando un gruppo di tipi di spazio e aggiungendovi associando un tipo di spazio, quindi puoi controllarne la visualizzazione da questa sezione",
@@ -40741,7 +40768,11 @@ var jsonTranslationsFiles = {
 		"RoomsBulkEditSelectDimensions.multipleValues": "Meerdere waarden",
 		"RoomSegmentRoomsList.title": "De ruimtes die aan dit segment zijn gekoppeld",
 		"RoomTooltip.roomWorkplaceAffectations": "Werkstationopdrachten",
-		"RoomTypeGroupHelpTitle.exclude": "De groepering van het ruimtetype %{name} is van het uitsluitingstype. Het brengt alle ruimtes samen, met uitzondering van de volgende ruimtetypologieën:",
+		"RoomTypeGroupHelpTitle.columnRoomType": "Typologie",
+		"RoomTypeGroupHelpTitle.columnShare": "%",
+		"RoomTypeGroupHelpTitle.columnSurface": "Oppervlak",
+		"RoomTypeGroupHelpTitle.columnWorkplaces": "Posities",
+		"RoomTypeGroupHelpTitle.exclude": "De ruimtetypegroepering %{name} is van het uitsluitingstype. Deze groepeert de volgende beschikbare ruimtetypes:",
 		"RoomTypeGroupHelpTitle.include": "De ruimtetypegroepering %{name} brengt de volgende ruimtetypologieën samen:",
 		"RoomTypeGroupLabel.exclude.tooltip": "De ruimtetypologiegroep sluit bijbehorende ruimtetypen uit",
 		"RoomTypeGroupMapFilter.Empty": "Er is geen ruimtetypegroep gekoppeld aan ruimtes via ruimtetypen. U kunt er meer toevoegen door een ruimtetypegroep te bewerken en er een ruimtetype aan toe te voegen. Vervolgens kunt u de weergave ervan vanuit deze sectie beheren",
@@ -182722,16 +182753,26 @@ function unloadPlatformBuildingCuby(args) {
 	args.layer.refreshSceneRoots();
 	requestMapRepaint(args.map);
 }
-function findBuilding(buildings, buildingId) {
-	return buildings.find((b) => b.id === buildingId);
+function cubyLayoutRoomCount(instance) {
+	return instance.cuby?.elements?.rooms?.size ?? 0;
 }
 async function hydrateBudgetInstanceIfNeeded(args, instance) {
-	if (instance.cuby != null) {
-		args.pipelineTrace?.step("hydrateBudget.skip-already-has-cuby", { buildingId: instance.buildingId });
+	if (cubyLayoutRoomCount(instance) > 0) {
+		args.pipelineTrace?.step("hydrateBudget.skip-already-has-cuby", {
+			buildingId: instance.buildingId,
+			roomCount: cubyLayoutRoomCount(instance)
+		});
+		return true;
+	}
+	const building = resolveVisionBuildingSummaryForHydrate(instance.buildingId, args.buildings, args.structureMassing);
+	if (!building) {
+		args.pipelineTrace?.step("hydrateBudget.missing-building-summary", {
+			buildingId: instance.buildingId,
+			visionBuildingCount: args.buildings.length,
+			massingBuildingCount: args.structureMassing?.buildings.length ?? 0
+		});
 		return false;
 	}
-	const building = findBuilding(args.buildings, instance.buildingId);
-	if (!building) return false;
 	args.pipelineTrace?.step("hydrateBudget.hydrateInstance.start", { buildingId: instance.buildingId });
 	const createEngine = args.createCubyEngine;
 	await hydratePlatformBuildingCuby({
@@ -182786,6 +182827,33 @@ function tryUnparkStructureInstance(args, instance) {
 	});
 	return ok;
 }
+function traceMissingBudgetInstances(budgetBuildingIds, instances, trace) {
+	const instanceIds = new Set(instances.map((i) => i.buildingId));
+	for (const budgetId of budgetBuildingIds) {
+		if (instanceIds.has(budgetId)) continue;
+		trace?.step("hydrateBudget.missing-instance", {
+			buildingId: budgetId,
+			instanceCount: instances.length
+		});
+	}
+}
+async function syncOneCubyHydrateBudgetInstance(args, instance, budgetBuildingIds, parkedBuildingIds, hydratedBuildingIds) {
+	const inBudget = isBuildingInCubyHydrateBudget(instance.buildingId, budgetBuildingIds);
+	const isCubyLayoutHydrated = instance.cuby != null;
+	if (!inBudget && isCubyLayoutHydrated) {
+		if (tryParkOutOfBudgetInstance(args, instance)) {
+			parkedBuildingIds.push(instance.buildingId);
+			args.pipelineTrace?.step("hydrateBudget.parked", { buildingId: instance.buildingId });
+		}
+		return;
+	}
+	if (!inBudget) return;
+	if (tryUnparkStructureInstance(args, instance)) {
+		hydratedBuildingIds.push(instance.buildingId);
+		return;
+	}
+	if (await hydrateBudgetInstanceIfNeeded(args, instance)) hydratedBuildingIds.push(instance.buildingId);
+}
 /**
 * Selective Cuby hydrate for budget buildings; park others to structure massing (keep Cuby).
 * Hard dispose remains `unloadPlatformBuildingCuby` (leave view).
@@ -182800,23 +182868,8 @@ async function syncPlatformCubyHydrateBudget(args) {
 	const hydratedBuildingIds = [];
 	const unloadedBuildingIds = [];
 	const parkedBuildingIds = [];
-	for (const instance of args.instances) {
-		const inBudget = isBuildingInCubyHydrateBudget(instance.buildingId, budgetBuildingIds);
-		const isCubyLayoutHydrated = instance.cuby != null;
-		if (!inBudget && isCubyLayoutHydrated) {
-			if (tryParkOutOfBudgetInstance(args, instance)) {
-				parkedBuildingIds.push(instance.buildingId);
-				trace?.step("hydrateBudget.parked", { buildingId: instance.buildingId });
-			}
-			continue;
-		}
-		if (!inBudget) continue;
-		if (tryUnparkStructureInstance(args, instance)) {
-			hydratedBuildingIds.push(instance.buildingId);
-			continue;
-		}
-		if (await hydrateBudgetInstanceIfNeeded(args, instance)) hydratedBuildingIds.push(instance.buildingId);
-	}
+	traceMissingBudgetInstances(budgetBuildingIds, args.instances, trace);
+	for (const instance of args.instances) await syncOneCubyHydrateBudgetInstance(args, instance, budgetBuildingIds, parkedBuildingIds, hydratedBuildingIds);
 	return {
 		budgetBuildingIds,
 		hydratedBuildingIds,
@@ -185171,7 +185224,7 @@ async function runPlatformFocusedCubyHydrate(args) {
 		args.setCubyHydrateError(null);
 		if (!syncResult.hydratedBuildingIds.includes(buildingId)) {
 			if (hydrateIntent !== "preload") {
-				args.lastHydratedCubyBuildingIdRef.current = syncResult.budgetBuildingIds[0] ?? null;
+				args.lastHydratedCubyBuildingIdRef.current = null;
 				args.setCubyHydratedBuildingId(null);
 				args.setDrillGhostFloorsOn(false);
 			}
@@ -185179,7 +185232,12 @@ async function runPlatformFocusedCubyHydrate(args) {
 				type: "cancel",
 				buildingId
 			});
-			trace.end("skip", { reason: "building-not-in-hydrated-ids" });
+			trace.end("skip", {
+				reason: "building-not-in-hydrated-ids",
+				budgetBuildingIds: syncResult.budgetBuildingIds,
+				hydratedBuildingIds: syncResult.hydratedBuildingIds,
+				instanceCount: args.attached.instances.length
+			});
 			return;
 		}
 		const hydrated = args.attached.instances.find((i) => i.buildingId === buildingId);
