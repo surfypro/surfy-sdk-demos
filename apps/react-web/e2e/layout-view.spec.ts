@@ -3,7 +3,7 @@ import { hasSurfySdkCredentials, SDK_CREDENTIALS_HINT } from './credentials';
 import {
   attachBrowserErrorCollector,
   BUILDING_3D_DEMO_URL,
-  DEFAULT_DEMO_URL,
+  FLOOR_2D_DEMO_URL,
   getBuildingCanvasFingerprint,
   getFloor2dSvgTransform,
   waitForLayoutDemoActions,
@@ -19,7 +19,7 @@ test.describe('Layout view controls', () => {
 
     const errors = attachBrowserErrorCollector(page);
 
-    await page.goto(DEFAULT_DEMO_URL);
+    await page.goto(FLOOR_2D_DEMO_URL);
     await expect(page.locator('surfy-floor-layout-2d')).toBeVisible({ timeout: 60_000 });
     await waitForLayoutDemoActions(page);
 

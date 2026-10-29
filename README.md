@@ -27,6 +27,22 @@ In `apps/react-web`, the **sole** public MapLibre surface is **`platform-3d`** â
 
 Help pages: [Platform view](https://help.surfy.pro/entities/sdk/platform-campus-3d), [Surfy React Web](https://help.surfy.pro/entities/sdk/surfy-react-web), [3D options](https://help.surfy.pro/entities/sdk/options-3d).
 
+## Quick relaunch (local)
+
+When the Surfy monorepo is a sibling (`../surfy`) and envs are already set:
+
+```bash
+cd ../surfy && pnpm build:sdk:sync   # skip if packages/surfy-sdk is already fresh
+cd ../surfy-sdk-demos && pnpm dev
+```
+
+| Service | URL |
+|---------|-----|
+| React web demo | http://localhost:5173/ |
+| Demo server (auth + API proxy) | http://localhost:8787 |
+
+Full eng runbook (watch mode, scripts table, checklist): [`docs/surfy-sdk/demo-local-relaunch.md`](../surfy/docs/surfy-sdk/demo-local-relaunch.md) in the Surfy checkout.
+
 ## Setup
 
 1. Sync the SDK bundle (from the Surfy monorepo):

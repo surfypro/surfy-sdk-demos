@@ -12,31 +12,25 @@ test.describe('React demo shell', () => {
 
     await page.goto('/');
 
-    await expect(page).toHaveURL(/\/floor-2d$/);
+    await expect(page).toHaveURL(/\/platform-3d$/);
     await expect(page.getByTestId('demo-topbar')).toBeVisible();
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.getByTestId('demo-tab-floor-2d')).toBeVisible();
     await expect(page.getByTestId('demo-tab-building-3d')).toBeVisible();
     await expect(page.getByTestId('demo-tab-floor-3d')).toBeVisible();
     await expect(page.getByTestId('demo-tab-platform-3d')).toBeVisible();
+    await expect(page.getByTestId('demo-section-platform-3d')).toBeVisible();
 
     if (hasSdkCredentials) {
-      await expect(page.getByTestId('demo-scope-picker')).toBeVisible({ timeout: 60_000 });
-      await expect(page.getByTestId('demo-section-floor-2d')).toBeVisible();
-      await expect(page.getByText('Last event:')).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Clear colors' })).toBeVisible();
-      await expect(page.getByTestId('demo-fit-to-view')).toBeVisible();
-      await expect(page.getByTestId('demo-zoom-on-room')).toBeVisible();
-      await expect(page.locator('surfy-floor-layout-2d')).toBeVisible();
-
       await expect
-        .poll(async () => page.locator('p', { hasText: 'Last event:' }).textContent(), {
-          timeout: 60_000,
-          message: 'Waiting for surfy:ready from the SDK',
-        })
-        .toContain('surfy:ready');
-    } else {
-      await expect(page.getByTestId('demo-catalog-error')).toBeVisible({ timeout: 15_000 });
+        .poll(
+          async () => page.getByTestId('demo-platform-event-log').textContent(),
+          {
+            timeout: 90_000,
+            message: 'Waiting for onReady on default platform-3d',
+          },
+        )
+        .toContain('onReady');
     }
 
     errors.assertNoJsErrors();

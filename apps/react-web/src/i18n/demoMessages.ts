@@ -56,9 +56,12 @@ const messages = {
     'platform.hostChromeNote':
       'Chrome hôte : listes bâtiments / étages / inject geo pilotent le SDK via hooks publics (pas de drawers produit embarqués).',
     'platform.noGpsHint': 'Pas de GPS — sélection sans vol caméra',
+    'platform.geoInjectTitle': 'Position GPS (lat / lng / altitude)',
     'platform.altitudeHint': 'étage estimé → espace',
     'platform.injectAltitude': 'Injecter Position par altitude',
     'platform.lastGeo': 'Dernier résultat geo',
+    'platform.altitudeFloor0Missing':
+      'Ce bâtiment n’a pas d’altitude d’étage 0 calibrée — sans cette référence, le SDK ne peut pas estimer l’étage depuis l’altitude GPS. Calibrez « Altitude étage 0 » sur le bâtiment dans Surfy, ou utilisez le mode fixtures.',
     'platform.events': 'Events',
     'platform.cubyHydrateError':
       'Impossible de charger le bâtiment 3D (Cuby). Aucun cube de remplacement — réessayez ou choisissez un autre bâtiment.',
@@ -121,9 +124,12 @@ const messages = {
     'platform.hostChromeNote':
       'Host chrome: building / floor lists and inject-geo drive the SDK via public hooks (no packaged product drawers).',
     'platform.noGpsHint': 'No GPS — select without camera fly',
+    'platform.geoInjectTitle': 'GPS position (lat / lng / altitude)',
     'platform.altitudeHint': 'estimated floor → space',
     'platform.injectAltitude': 'Inject Position from altitude',
     'platform.lastGeo': 'Last geo result',
+    'platform.altitudeFloor0Missing':
+      'This building has no calibrated floor-0 altitude — without that reference the SDK cannot estimate the floor from GPS altitude. Set “Altitude floor 0” on the building in Surfy, or use fixture mode.',
     'platform.events': 'Events',
     'platform.cubyHydrateError':
       'Could not load the 3D building (Cuby). No placeholder cube — retry or pick another building.',

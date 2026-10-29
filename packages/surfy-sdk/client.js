@@ -11,7 +11,7 @@ function createFilter(operator, column, value) {
 var version = {
 	"major": 3,
 	"minor": 5,
-	"build": 65
+	"build": 67
 };
 //#endregion
 //#region src/back/Tracking/version.ts

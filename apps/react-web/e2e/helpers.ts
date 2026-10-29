@@ -9,12 +9,13 @@ type BrowserErrorCollector = {
 
 export const DEMO_ROOM_COLOR = '#2196F3';
 export const DEFAULT_ROOM_FILL = '#e8e8e8';
-/** Default SPA entry after `/` redirect. */
-export const DEFAULT_DEMO_URL = '/floor-2d';
+export const FLOOR_2D_DEMO_URL = '/floor-2d';
 export const BUILDING_3D_DEMO_URL = '/building-3d';
 export const FLOOR_3D_DEMO_URL = '/floor-3d';
 export const PLATFORM_3D_DEMO_URL = '/platform-3d';
 export const DATA_API_DEMO_URL = '/data-api';
+/** Default SPA entry after `/` redirect. */
+export const DEFAULT_DEMO_URL = PLATFORM_3D_DEMO_URL;
 
 type SurfyLayoutElement = HTMLElement & {
   setRoomColors: (colors: Record<number, string>) => void;

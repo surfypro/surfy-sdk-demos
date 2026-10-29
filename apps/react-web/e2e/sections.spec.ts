@@ -3,7 +3,7 @@ import { hasSurfySdkCredentials } from './credentials';
 import {
   attachBrowserErrorCollector,
   BUILDING_3D_DEMO_URL,
-  DEFAULT_DEMO_URL,
+  FLOOR_2D_DEMO_URL,
   FLOOR_3D_DEMO_URL,
 } from './helpers';
 
@@ -15,7 +15,7 @@ test.describe('Demo sections', () => {
 
     const errors = attachBrowserErrorCollector(page);
 
-    await page.goto(DEFAULT_DEMO_URL);
+    await page.goto(FLOOR_2D_DEMO_URL);
 
     if (hasSdkCredentials) {
       await expect(page.getByTestId('demo-scope-picker')).toBeVisible({ timeout: 60_000 });

@@ -492,20 +492,9 @@ button:disabled {
   flex: 1;
 }
 
-.demo-platform-overlay {
-  position: absolute;
-  z-index: 2;
-  left: 12px;
-  bottom: 12px;
-  max-width: min(360px, calc(100% - 24px));
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--demo-surface, #fff) 92%, transparent);
-  border: 1px solid var(--demo-border);
-  box-shadow: 0 2px 10px rgb(0 0 0 / 12%);
-}
-
-.demo-platform-buildings-slot {
+.demo-platform-buildings-slot,
+.demo-platform-floors-slot,
+.demo-platform-altitude-slot {
   margin-bottom: 10px;
 }
 
@@ -513,6 +502,10 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--demo-border);
+  background: color-mix(in srgb, var(--demo-surface, #fff) 96%, transparent);
 }
 
 .demo-platform-buildings {

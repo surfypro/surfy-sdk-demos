@@ -53,7 +53,7 @@ var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require
 var version$1 = {
 	"major": 3,
 	"minor": 5,
-	"build": 65
+	"build": 67
 };
 //#endregion
 //#region src/back/Tracking/version.ts

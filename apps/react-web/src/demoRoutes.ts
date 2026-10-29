@@ -1,7 +1,7 @@
 import type { DemoSectionId } from './demoSections';
 import { DEMO_SECTIONS } from './demoSections';
 
-export const DEFAULT_DEMO_SECTION: DemoSectionId = 'floor-2d';
+export const DEFAULT_DEMO_SECTION: DemoSectionId = 'platform-3d';
 
 export function buildDemoPath(section: DemoSectionId): string {
   return `/${section}`;

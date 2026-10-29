@@ -3,7 +3,7 @@ import { hasSurfySdkCredentials, SDK_CREDENTIALS_HINT } from './credentials';
 import {
   attachBrowserErrorCollector,
   clearRoomColorsOnPlan,
-  DEFAULT_DEMO_URL,
+  FLOOR_2D_DEMO_URL,
   DEFAULT_ROOM_FILL,
   DEMO_ROOM_COLOR,
   expectRoomFill,
@@ -30,7 +30,7 @@ test.describe('Room color', () => {
 
     const errors = attachBrowserErrorCollector(page);
 
-    await page.goto(DEFAULT_DEMO_URL);
+    await page.goto(FLOOR_2D_DEMO_URL);
 
     await expect(page.getByTestId('demo-scope-picker')).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('surfy-floor-layout-2d')).toBeVisible();
@@ -54,7 +54,7 @@ test.describe('Room color', () => {
 
     const errors = attachBrowserErrorCollector(page);
 
-    await page.goto(DEFAULT_DEMO_URL);
+    await page.goto(FLOOR_2D_DEMO_URL);
 
     await expect(page.getByTestId('demo-scope-picker')).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('surfy-floor-layout-2d')).toBeVisible();

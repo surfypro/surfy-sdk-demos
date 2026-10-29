@@ -4,14 +4,14 @@ import {
   attachBrowserErrorCollector,
   BUILDING_3D_DEMO_URL,
   DATA_API_DEMO_URL,
-  DEFAULT_DEMO_URL,
+  FLOOR_2D_DEMO_URL,
   PLATFORM_3D_DEMO_URL,
 } from './helpers';
 
 const hasSdkCredentials = hasSurfySdkCredentials();
 
 const DEEP_LINKS = [
-  DEFAULT_DEMO_URL,
+  FLOOR_2D_DEMO_URL,
   BUILDING_3D_DEMO_URL,
   DATA_API_DEMO_URL,
   PLATFORM_3D_DEMO_URL,

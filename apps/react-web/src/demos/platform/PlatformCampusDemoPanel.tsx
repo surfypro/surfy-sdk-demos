@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SURFY_SDK_MIN_HOST_VERSION, SURFY_SDK_VERSION } from '@surfy/surfy-sdk';
 import {
+  SdkAltitudeFloor0LockedError,
   SurfyPlatformView3dReact,
   useBuildings,
   useCurrentZoom,
@@ -32,8 +33,11 @@ interface PlatformHostListProps {
   readonly mountNode: HTMLElement | null;
 }
 
-/** Must render under SurfyPlatform Provider (as children). */
-function PlatformAltitudeControls() {
+/**
+ * Must render under SurfyPlatform Provider (as children), then portal into the
+ * left host sidebar — never float on the map.
+ */
+function PlatformAltitudeControls({ mountNode }: PlatformHostListProps) {
   const { t } = useDemoI18n();
   const positionFromGeo = usePositionFromGeo();
   const [lastResult, setLastResult] = useState<string>('—');
@@ -51,6 +55,11 @@ function PlatformAltitudeControls() {
             readonly ambiguous: boolean;
           };
       if (!result.ok) {
+        if (result.reason === 'ALTITUDE_FLOOR0_MISSING' || result.reason === 'NO_CALIBRATION') {
+          setError(t('platform.altitudeFloor0Missing'));
+          setLastResult(`locked: ${result.reason}`);
+          return;
+        }
         setLastResult(`locked: ${result.reason}`);
         return;
       }
@@ -58,13 +67,22 @@ function PlatformAltitudeControls() {
         `floor=${result.floorId} space=${result.spaceId ?? '—'} ambiguous=${String(result.ambiguous)}`,
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (err instanceof SdkAltitudeFloor0LockedError) {
+        setError(t('platform.altitudeFloor0Missing'));
+      } else {
+        setError(err instanceof Error ? err.message : String(err));
+      }
       setLastResult('error');
     }
-  }, [positionFromGeo]);
+  }, [positionFromGeo, t]);
 
-  return (
+  if (!mountNode) {
+    return null;
+  }
+
+  return createPortal(
     <div className="demo-platform-controls" data-testid="demo-platform-altitude">
+      <strong>{t('platform.geoInjectTitle')}</strong>
       <p className="demo-section__tag">
         <code>{'{ lat, lng, altitude }'}</code> → {t('platform.altitudeHint')}
       </p>
@@ -79,7 +97,8 @@ function PlatformAltitudeControls() {
           {error}
         </p>
       ) : null}
-    </div>
+    </div>,
+    mountNode,
   );
 }
 
@@ -271,6 +290,7 @@ export function PlatformCampusDemoPanel({
   const [log, setLog] = useState<string[]>([]);
   const [buildingsSlot, setBuildingsSlot] = useState<HTMLElement | null>(null);
   const [floorsSlot, setFloorsSlot] = useState<HTMLElement | null>(null);
+  const [altitudeSlot, setAltitudeSlot] = useState<HTMLElement | null>(null);
   const [cubyHydrateError, setCubyHydrateError] = useState<string | null>(null);
   const [mapHostEl, setMapHostEl] = useState<HTMLElement | null>(null);
   const assetsBaseUrl = useDemoAssetsBaseUrl();
@@ -406,12 +426,13 @@ export function PlatformCampusDemoPanel({
 
   const canMount = Boolean(tenant && assetsBaseUrl && hostCompat.status !== 'pending');
 
-  const overlayChildren = (
-    <div className="demo-platform-overlay">
+  /** Host chrome under Provider — portaled into the left sidebar slots (not map overlay). */
+  const hostChromeChildren = (
+    <>
       <PlatformBuildingsList mountNode={buildingsSlot} />
       <PlatformFloorsList mountNode={floorsSlot} />
-      <PlatformAltitudeControls />
-    </div>
+      <PlatformAltitudeControls mountNode={altitudeSlot} />
+    </>
   );
 
   return (
@@ -449,6 +470,11 @@ export function PlatformCampusDemoPanel({
               ref={setFloorsSlot}
               data-testid="demo-platform-floors-slot"
               className="demo-platform-floors-slot"
+            />
+            <div
+              ref={setAltitudeSlot}
+              data-testid="demo-platform-altitude-slot"
+              className="demo-platform-altitude-slot"
             />
             <p className="demo-section__description">
               {useFixtures ? t('platform.fixturesNote') : t('platform.liveApiNote')}
@@ -503,7 +529,7 @@ export function PlatformCampusDemoPanel({
                   key={`platform-${tenant}-${useFixtures ? 'fx' : 'live'}`}
                   {...commonProps}
                 >
-                  {overlayChildren}
+                  {hostChromeChildren}
                 </SurfyPlatformView3dReact>
               ) : null}
             </div>

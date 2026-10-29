@@ -5,7 +5,7 @@ import {
   BUILDING_3D_DEMO_URL,
   clickFirstRoomOnFloor2d,
   DATA_API_DEMO_URL,
-  DEFAULT_DEMO_URL,
+  FLOOR_2D_DEMO_URL,
   getBuildingCanvasFingerprint,
   hoverFirstRoomOnFloor2d,
   getRenderedRoomCount,
@@ -26,7 +26,7 @@ test.describe('SDK feature coverage (manifest)', () => {
 
       switch (feature.id) {
         case 'SurfySdk.version': {
-          await page.goto(DEFAULT_DEMO_URL);
+          await page.goto(FLOOR_2D_DEMO_URL);
           const meta = page.getByTestId('demo-sdk-meta');
           await expect(meta).toHaveAttribute('data-sdk-version', /^\d+\.\d+\.\d+/);
           const sdkVersion = await meta.getAttribute('data-sdk-version');
@@ -38,21 +38,21 @@ test.describe('SDK feature coverage (manifest)', () => {
           break;
         }
         case 'SurfySdk.tagForKind': {
-          await page.goto(DEFAULT_DEMO_URL);
+          await page.goto(FLOOR_2D_DEMO_URL);
           const meta = page.getByTestId('demo-sdk-meta');
           await expect(meta).toHaveAttribute('data-floor-tag', 'surfy-floor-layout-2d');
           await expect(meta).toHaveAttribute('data-building-tag', 'surfy-building-layout-3d');
           break;
         }
         case 'SurfySdk.isKindRegistered': {
-          await page.goto(DEFAULT_DEMO_URL);
+          await page.goto(FLOOR_2D_DEMO_URL);
           const meta = page.getByTestId('demo-sdk-meta');
           await expect(meta).toHaveAttribute('data-floor-registered', 'true');
           await expect(meta).toHaveAttribute('data-building-registered', 'true');
           break;
         }
         case 'SurfyLayout.setTheme': {
-          await page.goto(DEFAULT_DEMO_URL);
+          await page.goto(FLOOR_2D_DEMO_URL);
           await waitForLayoutDemoActions(page);
           await page.locator('surfy-floor-layout-2d').evaluate((element) => {
             (element as HTMLElement & { setTheme: (theme?: unknown) => void }).setTheme({
@@ -64,7 +64,7 @@ test.describe('SDK feature coverage (manifest)', () => {
           break;
         }
         case 'SurfyLayout.setFillParent': {
-          await page.goto(DEFAULT_DEMO_URL);
+          await page.goto(FLOOR_2D_DEMO_URL);
           await waitForLayoutDemoActions(page);
           expect(await readFillParentAttribute(page, 'surfy-floor-layout-2d')).toBe(true);
           await page.getByTestId('demo-fill-parent').uncheck();
@@ -78,14 +78,14 @@ test.describe('SDK feature coverage (manifest)', () => {
           break;
         }
         case 'SurfyLayout.getRenderedRoomIds': {
-          await page.goto(DEFAULT_DEMO_URL);
+          await page.goto(FLOOR_2D_DEMO_URL);
           await waitForLayoutDemoActions(page);
           const count = await getRenderedRoomCount(page, 'surfy-floor-layout-2d');
           expect(count).toBeGreaterThan(0);
           break;
         }
         case 'SurfyLayout.setEntityId': {
-          await page.goto(DEFAULT_DEMO_URL);
+          await page.goto(FLOOR_2D_DEMO_URL);
           await expect(page.getByTestId('demo-scope-picker')).toBeVisible({ timeout: 60_000 });
           await waitForLayoutDemoActions(page);
           const floorSelect = page.getByTestId('demo-floor-select');
@@ -113,7 +113,7 @@ test.describe('SDK feature coverage (manifest)', () => {
           break;
         }
         case 'SurfyLayout.addPin': {
-          await page.goto(DEFAULT_DEMO_URL);
+          await page.goto(FLOOR_2D_DEMO_URL);
           await waitForLayoutDemoActions(page);
           await page.getByTestId('demo-pin-random-room').click();
           await expect(page.getByTestId('demo-api-snippet')).toContainText('layout.addPin', {
@@ -137,7 +137,7 @@ test.describe('SDK feature coverage (manifest)', () => {
           break;
         }
         case 'SurfyLayout.clearPins': {
-          await page.goto(DEFAULT_DEMO_URL);
+          await page.goto(FLOOR_2D_DEMO_URL);
           await waitForLayoutDemoActions(page);
           await page.getByTestId('demo-pin-random-room').click();
           await expect(page.getByTestId('demo-api-snippet')).toContainText('layout.addPin', {
@@ -155,7 +155,7 @@ test.describe('SDK feature coverage (manifest)', () => {
           break;
         }
         case 'SurfyLayout.destroy': {
-          await page.goto(DEFAULT_DEMO_URL);
+          await page.goto(FLOOR_2D_DEMO_URL);
           await waitForLayoutDemoActions(page);
           await page.getByTestId('demo-tab-data-api').click();
           await expect(page.locator('surfy-floor-layout-2d')).toHaveCount(0);
@@ -213,7 +213,7 @@ test.describe('SDK feature coverage (manifest)', () => {
           break;
         }
         case 'surfy:room-hover': {
-          await page.goto(DEFAULT_DEMO_URL);
+          await page.goto(FLOOR_2D_DEMO_URL);
           await waitForLayoutDemoActions(page);
           await hoverFirstRoomOnFloor2d(page);
           await expect
@@ -222,7 +222,7 @@ test.describe('SDK feature coverage (manifest)', () => {
           break;
         }
         case 'surfy:room-selected': {
-          await page.goto(DEFAULT_DEMO_URL);
+          await page.goto(FLOOR_2D_DEMO_URL);
           await waitForLayoutDemoActions(page);
           const roomId = await clickFirstRoomOnFloor2d(page);
           await expect
