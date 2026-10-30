@@ -183538,7 +183538,7 @@ function shouldResetFlownBuilding(zoomLevel, buildingId) {
 */
 var PREFIX$1 = "[surfy-sdk-version]";
 /** Bump when shipping click/camera debug so console proves the deployed bundle. */
-var SURFY_SDK_PLATFORM_DEBUG_BUILD = "platform-click-enter-2026-10-30c";
+var SURFY_SDK_PLATFORM_DEBUG_BUILD = "platform-click-enter-2026-10-30d";
 var LOGGED_KEY = "__SURFY_SDK_RUNTIME_VERSIONS_LOGGED__";
 /**
 * Log SDK + host version once per page (idempotent). Safe in browser and Node.
@@ -189309,7 +189309,7 @@ function PlatformCampusViewBody(props) {
 			resolveFootprintBounds: (id) => resolvePlatformBuildingFootprintBounds({
 				buildingId: id,
 				massing: structureMassingRef.current,
-				buildingLatLng: findVisionBuilding(buildingsRef.current, id)
+				buildingLatLng: resolveVisionBuildingSummaryForHydrate(id, buildingsRef.current, structureMassingRef.current)
 			}),
 			resolveBearingDegrees: (id) => resolvePlatformBuildingMapLibreBearingDegrees({
 				buildingId: id,
@@ -189323,7 +189323,9 @@ function PlatformCampusViewBody(props) {
 			detail: {
 				flew: result.flew,
 				skipped: result.skipped,
-				zoomBuildingIdBefore: zoomBuildingIdRef.current
+				zoomBuildingIdBefore: zoomBuildingIdRef.current,
+				visionBuildingCount: buildingsRef.current.length,
+				massingBuildingCount: structureMassingRef.current?.buildings.length ?? 0
 			}
 		});
 		if (!result.skipped) setGestureEnterEpoch((value) => value + 1);
@@ -189440,7 +189442,7 @@ function PlatformCampusViewBody(props) {
 			return;
 		}
 		cancelCampusOverviewMassingFit(massingFitDisposeRef);
-		const building = findVisionBuilding(buildings, buildingId);
+		const building = resolveVisionBuildingSummaryForHydrate(buildingId, buildings, structureMassingRef.current);
 		loadBuildingDetailOnFocusChange({
 			buildingId,
 			lastLoadedBuildingIdRef,
@@ -189473,6 +189475,9 @@ function PlatformCampusViewBody(props) {
 				roomsReady,
 				mapZoom,
 				hasBuilding: building != null,
+				buildingFromMassingFallback: building != null && !buildings.some((b) => b.id === buildingId),
+				visionBuildingCount: buildings.length,
+				massingBuildingCount: structureMassingRef.current?.buildings.length ?? 0,
 				hasAttached: attachedEarly != null,
 				hasMap: mapEarly != null,
 				cubyVisualMode: prior?.cubyVisualMode ?? null,
@@ -189750,7 +189755,7 @@ function PlatformCampusViewBody(props) {
 				setCubyHydrateError(null);
 				const focusedId = zoomBuildingIdRef.current;
 				if (focusedId != null && result.appliedBuildingIds.includes(focusedId)) {
-					const focusedBuilding = findVisionBuilding(buildingsRef.current, focusedId);
+					const focusedBuilding = resolveVisionBuildingSummaryForHydrate(focusedId, buildingsRef.current, massing);
 					const flyResult = flyHostMapToBuildingIfNeeded({
 						map,
 						building: focusedBuilding,
@@ -189801,7 +189806,7 @@ function PlatformCampusViewBody(props) {
 								attached: attachedNow,
 								map,
 								buildingId: focusId,
-								building: findVisionBuilding(buildingsRef.current, focusId),
+								building: resolveVisionBuildingSummaryForHydrate(focusId, buildingsRef.current, structureMassingRef.current),
 								buildings: buildingsRef.current,
 								structureMassing: structureMassingRef.current,
 								lastFocusedBuildingIdRef,
@@ -189858,7 +189863,7 @@ function PlatformCampusViewBody(props) {
 								attached: attachedNow,
 								map,
 								buildingId,
-								building: findVisionBuilding(buildingsRef.current, buildingId),
+								building: resolveVisionBuildingSummaryForHydrate(buildingId, buildingsRef.current, structureMassingRef.current),
 								buildings: buildingsRef.current,
 								detail: null,
 								structureMassing: structureMassingRef.current,
