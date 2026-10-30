@@ -183503,7 +183503,7 @@ function findVisionBuilding(buildings, buildingId) {
 */
 function flyHostMapToBuildingIfNeeded(args) {
 	const { map, building, buildingId, lastFlownBuildingId } = args;
-	if (!map || !building) return {
+	if (!map) return {
 		flew: false,
 		nextLastFlownBuildingId: lastFlownBuildingId
 	};
@@ -183512,8 +183512,19 @@ function flyHostMapToBuildingIfNeeded(args) {
 		nextLastFlownBuildingId: lastFlownBuildingId
 	};
 	const footprintBounds = args.resolveFootprintBounds?.(buildingId) ?? null;
+	const buildingForFly = building ?? (footprintBounds == null ? void 0 : {
+		id: buildingId,
+		name: "",
+		lat: footprintBounds.anchor.lat,
+		lng: footprintBounds.anchor.lng,
+		footprints: []
+	});
+	if (!buildingForFly) return {
+		flew: false,
+		nextLastFlownBuildingId: lastFlownBuildingId
+	};
 	const bearing = args.resolveBearingDegrees?.(buildingId);
-	if (!flyMapToBuilding(map, building, {
+	if (!flyMapToBuilding(map, buildingForFly, {
 		footprintBounds,
 		...bearing === void 0 ? {} : { bearing },
 		...args.minZoom === void 0 ? {} : { minZoom: args.minZoom }
@@ -183538,7 +183549,7 @@ function shouldResetFlownBuilding(zoomLevel, buildingId) {
 */
 var PREFIX$1 = "[surfy-sdk-version]";
 /** Bump when shipping click/camera debug so console proves the deployed bundle. */
-var SURFY_SDK_PLATFORM_DEBUG_BUILD = "platform-click-enter-2026-10-30d";
+var SURFY_SDK_PLATFORM_DEBUG_BUILD = "platform-click-enter-2026-10-30e";
 var LOGGED_KEY = "__SURFY_SDK_RUNTIME_VERSIONS_LOGGED__";
 /**
 * Log SDK + host version once per page (idempotent). Safe in browser and Node.
@@ -183640,6 +183651,7 @@ function focusPlatformBuildingFromUserGesture(args) {
 		campusId
 	});
 	const building = findVisionBuilding(buildings, buildingId);
+	const footprintBounds = args.resolveFootprintBounds?.(buildingId) ?? null;
 	const minZoom = Math.max(17, PLATFORM_STRUCTURE_BUILDING_Z_ENTER);
 	const flyResult = flyHostMapToBuildingIfNeeded({
 		map,
@@ -183661,6 +183673,7 @@ function focusPlatformBuildingFromUserGesture(args) {
 			skipped: false,
 			minZoom,
 			foundBuilding: building != null,
+			hasFootprintBounds: footprintBounds != null,
 			mapZoomAfterRequest: typeof map?.getZoom === "function" ? map.getZoom() : null
 		}
 	});
