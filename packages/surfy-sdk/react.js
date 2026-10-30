@@ -183538,7 +183538,7 @@ function shouldResetFlownBuilding(zoomLevel, buildingId) {
 */
 var PREFIX$1 = "[surfy-sdk-version]";
 /** Bump when shipping click/camera debug so console proves the deployed bundle. */
-var SURFY_SDK_PLATFORM_DEBUG_BUILD = "platform-click-enter-2026-10-30b";
+var SURFY_SDK_PLATFORM_DEBUG_BUILD = "platform-click-enter-2026-10-30c";
 var LOGGED_KEY = "__SURFY_SDK_RUNTIME_VERSIONS_LOGGED__";
 /**
 * Log SDK + host version once per page (idempotent). Safe in browser and Node.
@@ -189204,6 +189204,11 @@ function PlatformCampusViewBody(props) {
 	const lastFocusedBuildingIdRef = useRef(null);
 	/** Explicit click enter — suppress park-while-flying + force hydrate/unpark below Z_ENTER. */
 	const enterFromGestureBuildingIdRef = useRef(null);
+	/**
+	* Bump on every non-skipped click so the zoom effect re-runs even when
+	* `enterBuilding` targets the same buildingId already in the atom (no-op deps).
+	*/
+	const [gestureEnterEpoch, setGestureEnterEpoch] = useState(0);
 	/** Fold former cubyHydrateError useState into État de chargement contexte atom (WI-504 M2). */
 	const setCubyHydrateError = useMemo(() => createCubyHydrateErrorSetter(jotaiStore, lastFocusedBuildingIdRef, lastHydratedCubyBuildingIdRef), [jotaiStore]);
 	const massingAppliedRef = useRef(false);
@@ -189317,9 +189322,11 @@ function PlatformCampusViewBody(props) {
 			source,
 			detail: {
 				flew: result.flew,
-				skipped: result.skipped
+				skipped: result.skipped,
+				zoomBuildingIdBefore: zoomBuildingIdRef.current
 			}
 		});
+		if (!result.skipped) setGestureEnterEpoch((value) => value + 1);
 		return result;
 	}, [setZoom]);
 	const onMassingBuildingClick = useCallback((hit) => {
@@ -189391,7 +189398,25 @@ function PlatformCampusViewBody(props) {
 	/** React to zoom — fly + load detail + selective Cuby hydrate budget (Phase C). */
 	useEffect(() => {
 		const buildingId = zoom.buildingId;
+		logPlatformBuildingClickVerbose({
+			phase: "effect.run",
+			buildingId: buildingId ?? -1,
+			source: "effect",
+			detail: {
+				zoomLevel: zoom.level,
+				gestureEnterEpoch,
+				gestureRef: enterFromGestureBuildingIdRef.current,
+				massingApplied: massingAppliedRef.current,
+				attachedInstances: cubyAttachRef.current?.instances.length ?? 0
+			}
+		});
 		if (shouldResetFlownBuilding(zoom.level, buildingId)) {
+			logPlatformBuildingClickVerbose({
+				phase: "effect.reset-overview",
+				buildingId: buildingId ?? -1,
+				source: "effect",
+				detail: { zoomLevel: zoom.level }
+			});
 			lastFlownBuildingIdRef.current = null;
 			unloadHydratedCubyIfAny(cubyAttachRef, lastHydratedCubyBuildingIdRef, mapRef, structureMassingRef.current);
 			setCubyHydratedBuildingId(null);
@@ -189404,6 +189429,11 @@ function PlatformCampusViewBody(props) {
 			return;
 		}
 		if (buildingId == null) {
+			logPlatformBuildingClickVerbose({
+				phase: "effect.no-buildingId",
+				buildingId: -1,
+				source: "effect"
+			});
 			unloadHydratedCubyIfAny(cubyAttachRef, lastHydratedCubyBuildingIdRef, mapRef, structureMassingRef.current);
 			setCubyHydratedBuildingId(null);
 			setDrillGhostFloorsOn(false);
@@ -189433,6 +189463,22 @@ function PlatformCampusViewBody(props) {
 		const roomsReady = (prior?.cuby?.elements?.rooms?.size ?? 0) > 0;
 		const attachedEarly = cubyAttachRef.current;
 		const mapEarly = mapRef.current;
+		logPlatformBuildingClickVerbose({
+			phase: "effect.enter-decide",
+			buildingId,
+			source: "effect",
+			detail: {
+				willHydrateCuby,
+				forceEnterFromGesture,
+				roomsReady,
+				mapZoom,
+				hasBuilding: building != null,
+				hasAttached: attachedEarly != null,
+				hasMap: mapEarly != null,
+				cubyVisualMode: prior?.cubyVisualMode ?? null,
+				enableCubyHydrate: enableCubyHydrateRef.current
+			}
+		});
 		if (forceEnterFromGesture && prior?.cubyVisualMode === "structure" && roomsReady && attachedEarly && mapEarly) {
 			logPlatformBuildingClickVerbose({
 				phase: "effect.unpark-from-gesture",
@@ -189513,11 +189559,34 @@ function PlatformCampusViewBody(props) {
 			})
 		});
 		lastFlownBuildingIdRef.current = flyResult.nextLastFlownBuildingId;
-		if (!willHydrateCuby) return;
+		if (!willHydrateCuby) {
+			logPlatformBuildingClickVerbose({
+				phase: "effect.skip-willHydrateCuby-false",
+				buildingId,
+				source: "effect",
+				detail: {
+					enableCubyHydrate: enableCubyHydrateRef.current,
+					hasBuilding: building != null,
+					massingApplied: massingAppliedRef.current
+				}
+			});
+			return;
+		}
 		lastFocusedBuildingIdRef.current = buildingId;
 		const attached = cubyAttachRef.current;
 		const map = mapRef.current;
-		if (!attached || !map) return;
+		if (!attached || !map) {
+			logPlatformBuildingClickVerbose({
+				phase: "effect.skip-no-attached-or-map",
+				buildingId,
+				source: "effect",
+				detail: {
+					hasAttached: attached != null,
+					hasMap: map != null
+				}
+			});
+			return;
+		}
 		logPlatformBuildingClickVerbose({
 			phase: "effect.hydrate-start",
 			buildingId,
@@ -189566,6 +189635,7 @@ function PlatformCampusViewBody(props) {
 	}, [
 		zoom.buildingId,
 		zoom.level,
+		gestureEnterEpoch,
 		buildings,
 		mapEpoch,
 		detail,
