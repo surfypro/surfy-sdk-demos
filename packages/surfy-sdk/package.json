@@ -1,6 +1,6 @@
 {
   "name": "@surfy/surfy-sdk",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "description": "Surfy integrator SDK — layout WC, Surfy React Web, isomorphic client (workspace artefact until npm publish).",
   "license": "UNLICENSED",
   "private": true,

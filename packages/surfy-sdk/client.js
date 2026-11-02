@@ -11,7 +11,7 @@ function createFilter(operator, column, value) {
 var version = {
 	"major": 3,
 	"minor": 5,
-	"build": 67
+	"build": 68
 };
 //#endregion
 //#region src/back/Tracking/version.ts
@@ -23,7 +23,7 @@ getAppVersion();
 //#endregion
 //#region src/surfy-sdk/constants.ts
 /** Published SDK semver — bump on public API changes. */
-var SURFY_SDK_VERSION = "0.3.0";
+var SURFY_SDK_VERSION = "0.3.2";
 //#endregion
 //#region src/surfy-sdk/client/surfyHttp.helper.ts
 function normalizeSurfyBaseUrl(baseUrl) {

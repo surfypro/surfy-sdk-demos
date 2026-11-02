@@ -1821,6 +1821,7 @@ export interface IDimensionRaw extends IEntity {
 	carbonFootprintPerMeter?: number;
 	crowdedForBookingRate?: number;
 	workplacesBookableOnlyViaDimension?: boolean;
+	comment?: string;
 	createdAt?: string;
 	updatedAt?: string;
 	externalId?: string;
@@ -3387,7 +3388,7 @@ export declare class SurfyClient {
 	fetchEntities<T>(queryNode: SurfyQueryNode, signal?: AbortSignal): Promise<T[]>;
 }
 /** Published SDK semver — bump on public API changes. */
-export declare const SURFY_SDK_VERSION = "0.3.0";
+export declare const SURFY_SDK_VERSION = "0.3.2";
 /**
  * Minimum Surfy host app version (`version.json` → `major.minor.build`) this SDK build requires.
  * Equals the Surfy version at SDK build time — host must be ≥ this (authenticated `/api/v1/configuration/config`).

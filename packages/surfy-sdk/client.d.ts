@@ -1532,6 +1532,7 @@ export interface IDimensionRaw extends IEntity {
 	carbonFootprintPerMeter?: number;
 	crowdedForBookingRate?: number;
 	workplacesBookableOnlyViaDimension?: boolean;
+	comment?: string;
 	createdAt?: string;
 	updatedAt?: string;
 	externalId?: string;
