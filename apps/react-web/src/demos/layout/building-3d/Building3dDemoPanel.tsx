@@ -21,10 +21,18 @@ import { useDemoAssetsBaseUrl } from '../../../useDemoAssetsBaseUrl';
 import { ApiSnippetPanel } from '../actions/ApiSnippetPanel';
 import type { DemoSurfaceMode } from '../shared/demoSurfaceMode';
 import { DemoReactBuildingHost } from '../shared/DemoReactLayoutHost';
-import { DEMO_ROOM_COLOR } from '../shared/layoutDemo.constants';
-import { LayoutDemoCommonActions } from '../shared/LayoutDemoCommonActions';
+import { afterLayoutViewportSettled } from '../shared/afterLayoutViewportSettled.helper';
+import {
+  DEMO_ROOM_COLOR,
+  DEMO_ZOOM_DIAMETER_METERS,
+} from '../shared/layoutDemo.constants';
+import {
+  LayoutDemoCommonActions,
+  LayoutDemoLastEvent,
+} from '../shared/LayoutDemoCommonActions';
 import { LayoutDemoShell } from '../shared/LayoutDemoShell';
 import { useLayoutDemoChrome } from '../shared/useLayoutDemoChrome';
+import { useDemoResponsive } from '../../../responsive/DemoResponsiveContext';
 import { Building3dDemoControls } from './Building3dDemoControls';
 import { buildInitialBuilding3dOptions } from './building3dDemo.constants';
 
@@ -45,7 +53,7 @@ type BuildingDemoHandle = SurfyLayout | ISurfyBuilding3dLayoutApi;
 function hasRenderedRoomIds(
   handle: BuildingDemoHandle | null,
 ): handle is SurfyLayout {
-  return handle != null && typeof (handle as SurfyLayout).getRenderedRoomIds === 'function';
+  return handle !== null && typeof (handle as SurfyLayout).getRenderedRoomIds === 'function';
 }
 
 /**
@@ -64,7 +72,9 @@ export function Building3dDemoPanel({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const layoutRef = useRef<SurfyLayout | null>(null);
   const reactLayoutRef = useRef<ISurfyBuilding3dLayoutApi | null>(null);
+  const cancelBuildingZoomRef = useRef<(() => void) | null>(null);
   const assetsBaseUrl = useDemoAssetsBaseUrl();
+  const { isCompact } = useDemoResponsive();
   const registered = SurfySdk.isKindRegistered('building-3d');
 
   const initialLayout3dOptions = useMemo(
@@ -85,6 +95,7 @@ export function Building3dDemoPanel({
     createMountListeners,
     resetOnUnmount,
     lastEvent,
+    eventLog,
     demoRoomId,
     randomBlinkOn,
     lastBlink,
@@ -127,12 +138,15 @@ export function Building3dDemoPanel({
 
   const zoomOnRoom = useCallback(
     (roomId: number) => {
-      const handle = activeHandle();
-      if (hasRenderedRoomIds(handle) && !isRenderedDemoRoom(handle, roomId)) {
-        return;
-      }
-      handle?.zoomOn({ roomId, diameterMeters: 5 });
-      pushApiLine(snippetZoomOnRoom(roomId));
+      cancelBuildingZoomRef.current?.();
+      cancelBuildingZoomRef.current = afterLayoutViewportSettled(() => {
+        const handle = activeHandle();
+        if (hasRenderedRoomIds(handle) && !isRenderedDemoRoom(handle, roomId)) {
+          return;
+        }
+        handle?.zoomOn({ roomId, diameterMeters: DEMO_ZOOM_DIAMETER_METERS });
+        pushApiLine(snippetZoomOnRoom(roomId));
+      });
     },
     [activeHandle, pushApiLine],
   );
@@ -165,7 +179,19 @@ export function Building3dDemoPanel({
     clearColors();
   }, [surfaceMode, clearColors, pushApiLine]);
 
-  const reactListeners = useMemo(() => createMountListeners(), [createMountListeners]);
+  const reactListeners = useMemo(() => {
+    const base = createMountListeners();
+    return {
+      ...base,
+      onRoomSelected: (detail: { roomId: number; name: string }) => {
+        base.onRoomSelected(detail);
+        // React host does not populate layoutRef — compact zoom via active handle.
+        if (isCompact && surfaceMode === 'react-web') {
+          zoomOnRoom(detail.roomId);
+        }
+      },
+    };
+  }, [createMountListeners, isCompact, surfaceMode, zoomOnRoom]);
 
   useEffect(() => {
     if (!active || surfaceMode !== 'api-js' || buildingId === undefined || !registered || !assetsBaseUrl) {
@@ -247,10 +273,10 @@ export function Building3dDemoPanel({
           />
         ) : null
       }
+      events={<LayoutDemoLastEvent lastEvent={lastEvent} eventLog={eventLog} />}
       sidebar={
         <>
           <LayoutDemoCommonActions
-            lastEvent={lastEvent}
             demoRoomId={demoRoomId}
             randomBlinkOn={randomBlinkOn}
             lastBlink={lastBlink}

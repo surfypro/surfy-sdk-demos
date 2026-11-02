@@ -1,4 +1,6 @@
 export const DEMO_ROOM_COLOR = '#2196F3';
+/** Metric framing for demo `zoomOn` — keeps the room readable and centered. */
+export const DEMO_ZOOM_DIAMETER_METERS = 5;
 export const RANDOM_BLINK_INTERVAL_MS = 250;
 export const API_LOG_MAX_LINES = 14;
 

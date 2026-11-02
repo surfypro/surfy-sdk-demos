@@ -3,6 +3,10 @@ import type { IBuilding, IFloor, IRoom } from '@surfy/surfy-sdk/client';
 
 import { createDemoSurfyClient } from '../../createDemoSurfyClient';
 import { useDemoI18n } from '../../i18n/DemoI18nProvider';
+import {
+  DemoResponsiveSlot,
+  useDemoResponsive,
+} from '../../responsive/DemoResponsiveContext';
 import { ApiSnippetPanel } from '../layout/actions/ApiSnippetPanel';
 import { FetchBuildingsAction } from './actions/FetchBuildingsAction';
 import { FetchFloorsAction } from './actions/FetchFloorsAction';
@@ -65,13 +69,100 @@ interface DataApiDemoPanelProps {
   readonly active: boolean;
 }
 
+function DataActionEventLog({
+  log,
+  selectedEventIndex,
+  onSelect,
+  hideTitle = false,
+}: {
+  readonly log: readonly string[];
+  readonly selectedEventIndex: number | null;
+  readonly onSelect: (index: number) => void;
+  readonly hideTitle?: boolean;
+}) {
+  const { t } = useDemoI18n();
+  return (
+    <div className="demo-events-log" data-testid="demo-data-event-log">
+      {hideTitle ? null : <strong>{t('chrome.events')}</strong>}
+      <ul className="demo-events-log__list">
+        {log.map((line, index) => (
+          <li key={`${index}-${line}`}>
+            <button
+              type="button"
+              className={`demo-events-log__item${
+                selectedEventIndex === index ? ' demo-events-log__item--selected' : ''
+              }`}
+              onClick={() => onSelect(index)}
+            >
+              <code>{line}</code>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function DataApiControls({
+  busy,
+  buildingId,
+  floorId,
+  error,
+  snippet,
+  onFetchBuildings,
+  onFetchFloors,
+  onFetchRooms,
+}: {
+  readonly busy: boolean;
+  readonly buildingId: number | undefined;
+  readonly floorId: number | undefined;
+  readonly error: string | null;
+  readonly snippet: string;
+  readonly onFetchBuildings: () => void;
+  readonly onFetchFloors: () => void;
+  readonly onFetchRooms: () => void;
+}) {
+  const { t } = useDemoI18n();
+  return (
+    <>
+      <div className="actions">
+        <FetchBuildingsAction disabled={busy} onClick={onFetchBuildings} />
+        <FetchFloorsAction disabled={busy || buildingId === undefined} onClick={onFetchFloors} />
+        <FetchRoomsAction disabled={busy || floorId === undefined} onClick={onFetchRooms} />
+      </div>
+      {buildingId === undefined ? <p className="demo-catalog-hint">{t('data.needBuilding')}</p> : null}
+      {buildingId !== undefined && floorId === undefined ? (
+        <p className="demo-catalog-hint">{t('data.needFloor')}</p>
+      ) : null}
+      {buildingId !== undefined ? (
+        <p className="demo-catalog-hint" data-testid="demo-data-scope">
+          {t('data.scopeFromResult', { buildingId, floorId: floorId ?? '—' })}
+        </p>
+      ) : null}
+      {error ? (
+        <p className="demo-catalog-error" role="alert" data-testid="demo-data-error">
+          {error}
+        </p>
+      ) : null}
+      <ApiSnippetPanel
+        testIdPrefix="demo-data-snippet"
+        titleKey="data.snippetTitle"
+        value={snippet}
+      />
+    </>
+  );
+}
+
 /**
  * Data API demo — no building/floor reference picker.
  * Scope IDs come from previous `fetchEntities` results (app-owned QueryNodes).
  */
 export function DataApiDemoPanel({ active }: DataApiDemoPanelProps) {
   const { t } = useDemoI18n();
+  const { isCompact } = useDemoResponsive();
   const [busy, setBusy] = useState(false);
+  const [actionLog, setActionLog] = useState<string[]>([]);
+  const [selectedEventIndex, setSelectedEventIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resultJson, setResultJson] = useState('// run an action');
   const [snippet, setSnippet] = useState(SNIPPET_BUILDINGS);
@@ -85,10 +176,14 @@ export function DataApiDemoPanel({ active }: DataApiDemoPanelProps) {
     try {
       const data = await action();
       setResultJson(JSON.stringify({ action: label, data }, null, 2));
+      setActionLog((prev) => [`ok · ${label}`, ...prev].slice(0, 12));
+      setSelectedEventIndex(0);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
       setResultJson(JSON.stringify({ action: label, error: message }, null, 2));
+      setActionLog((prev) => [`error · ${label}: ${message}`, ...prev].slice(0, 12));
+      setSelectedEventIndex(0);
     } finally {
       setBusy(false);
     }
@@ -106,11 +201,64 @@ export function DataApiDemoPanel({ active }: DataApiDemoPanelProps) {
       </header>
 
       <div className="demo-section__workspace">
-        <aside className="demo-section__sidebar" data-testid="demo-data-sidebar">
-          <div className="actions">
-            <FetchBuildingsAction
-              disabled={busy}
-              onClick={() =>
+        {isCompact ? (
+          <>
+            <DemoResponsiveSlot name="controls">
+              <div data-testid="demo-data-sidebar">
+                <DataApiControls
+                  busy={busy}
+                  buildingId={buildingId}
+                  floorId={floorId}
+                  error={error}
+                  snippet={snippet}
+                  onFetchBuildings={() =>
+                    void run('fetchEntities(buildingsQn)', SNIPPET_BUILDINGS, async () => {
+                      const client = await createDemoSurfyClient();
+                      const buildings = await client.fetchEntities<IBuilding>(demoQueryNodeBuildings());
+                      setBuildingId(buildings[0]?.id);
+                      setFloorId(undefined);
+                      return buildings;
+                    })
+                  }
+                  onFetchFloors={() => {
+                    if (buildingId === undefined) return;
+                    void run('fetchEntities(floorsQn)', snippetFloors(buildingId), async () => {
+                      const client = await createDemoSurfyClient();
+                      const floors = await client.fetchEntities<IFloor>(
+                        demoQueryNodeFloorsByBuilding(buildingId),
+                      );
+                      setFloorId(floors[0]?.id);
+                      return floors;
+                    });
+                  }}
+                  onFetchRooms={() => {
+                    if (floorId === undefined) return;
+                    void run('fetchEntities(roomsQn)', snippetRooms(floorId), async () => {
+                      const client = await createDemoSurfyClient();
+                      return client.fetchEntities<IRoom>(demoQueryNodeRoomsByFloor(floorId));
+                    });
+                  }}
+                />
+              </div>
+            </DemoResponsiveSlot>
+            <DemoResponsiveSlot name="events">
+              <DataActionEventLog
+                log={actionLog}
+                selectedEventIndex={selectedEventIndex}
+                onSelect={setSelectedEventIndex}
+                hideTitle
+              />
+            </DemoResponsiveSlot>
+          </>
+        ) : (
+          <aside className="demo-section__sidebar" data-testid="demo-data-sidebar">
+            <DataApiControls
+              busy={busy}
+              buildingId={buildingId}
+              floorId={floorId}
+              error={error}
+              snippet={snippet}
+              onFetchBuildings={() =>
                 void run('fetchEntities(buildingsQn)', SNIPPET_BUILDINGS, async () => {
                   const client = await createDemoSurfyClient();
                   const buildings = await client.fetchEntities<IBuilding>(demoQueryNodeBuildings());
@@ -119,10 +267,7 @@ export function DataApiDemoPanel({ active }: DataApiDemoPanelProps) {
                   return buildings;
                 })
               }
-            />
-            <FetchFloorsAction
-              disabled={busy || buildingId === undefined}
-              onClick={() => {
+              onFetchFloors={() => {
                 if (buildingId === undefined) return;
                 void run('fetchEntities(floorsQn)', snippetFloors(buildingId), async () => {
                   const client = await createDemoSurfyClient();
@@ -133,10 +278,7 @@ export function DataApiDemoPanel({ active }: DataApiDemoPanelProps) {
                   return floors;
                 });
               }}
-            />
-            <FetchRoomsAction
-              disabled={busy || floorId === undefined}
-              onClick={() => {
+              onFetchRooms={() => {
                 if (floorId === undefined) return;
                 void run('fetchEntities(roomsQn)', snippetRooms(floorId), async () => {
                   const client = await createDemoSurfyClient();
@@ -144,27 +286,8 @@ export function DataApiDemoPanel({ active }: DataApiDemoPanelProps) {
                 });
               }}
             />
-          </div>
-          {buildingId === undefined ? <p className="demo-catalog-hint">{t('data.needBuilding')}</p> : null}
-          {buildingId !== undefined && floorId === undefined ? (
-            <p className="demo-catalog-hint">{t('data.needFloor')}</p>
-          ) : null}
-          {buildingId !== undefined ? (
-            <p className="demo-catalog-hint" data-testid="demo-data-scope">
-              {t('data.scopeFromResult', { buildingId, floorId: floorId ?? '—' })}
-            </p>
-          ) : null}
-          {error ? (
-            <p className="demo-catalog-error" role="alert" data-testid="demo-data-error">
-              {error}
-            </p>
-          ) : null}
-          <ApiSnippetPanel
-            testIdPrefix="demo-data-snippet"
-            titleKey="data.snippetTitle"
-            value={snippet}
-          />
-        </aside>
+          </aside>
+        )}
         <div className="demo-section__map">
           <h3 className="demo-data-result__title">{t('data.result')}</h3>
           <pre className="demo-data-result" data-testid="demo-data-result">

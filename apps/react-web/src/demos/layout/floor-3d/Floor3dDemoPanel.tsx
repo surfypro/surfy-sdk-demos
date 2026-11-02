@@ -7,7 +7,6 @@ import {
   snippetFitToView,
   snippetSetOptions,
   snippetUpdateRoom,
-  snippetZoomOnRoom,
 } from '../../../demoApiSnippets';
 import { isRenderedDemoRoom } from '../../../demoLayoutElement';
 import { getDemoProxyBearer } from '../../../demoSession';
@@ -20,7 +19,10 @@ import type { DemoSurfaceMode } from '../shared/demoSurfaceMode';
 import { DemoReactFloorHost } from '../shared/DemoReactLayoutHost';
 import { Layout3dDemoControls } from '../shared/Layout3dDemoControls';
 import { buildInitialFloor3dOptions } from '../shared/layout3dDemo.constants';
-import { LayoutDemoCommonActions } from '../shared/LayoutDemoCommonActions';
+import {
+  LayoutDemoCommonActions,
+  LayoutDemoLastEvent,
+} from '../shared/LayoutDemoCommonActions';
 import { LayoutDemoShell } from '../shared/LayoutDemoShell';
 import { useLayoutDemoChrome } from '../shared/useLayoutDemoChrome';
 
@@ -67,6 +69,7 @@ export function Floor3dDemoPanel({
     createMountListeners,
     resetOnUnmount,
     lastEvent,
+    eventLog,
     demoRoomId,
     randomBlinkOn,
     lastBlink,
@@ -80,6 +83,7 @@ export function Floor3dDemoPanel({
     pinOnRandomRoom,
     pinOnRandomPlan,
     clearPins,
+    zoomOnRoomCentered,
     apiLog,
   } = useLayoutDemoChrome({
     layoutRef,
@@ -111,13 +115,9 @@ export function Floor3dDemoPanel({
 
   const zoomOnRoom = useCallback(
     (roomId: number) => {
-      if (!isRenderedDemoRoom(layoutRef.current, roomId)) {
-        return;
-      }
-      layoutRef.current?.zoomOn({ roomId, diameterMeters: 5 });
-      pushApiLine(snippetZoomOnRoom(roomId));
+      zoomOnRoomCentered(roomId, { logSnippet: true });
     },
-    [pushApiLine],
+    [zoomOnRoomCentered],
   );
 
   const logUpdateRoom = useCallback(
@@ -188,10 +188,10 @@ export function Floor3dDemoPanel({
           <DemoReactFloorHost kind="floor-3d" tenant={tenant} floorId={floorId} />
         ) : null
       }
+      events={<LayoutDemoLastEvent lastEvent={lastEvent} eventLog={eventLog} />}
       sidebar={
         <>
           <LayoutDemoCommonActions
-            lastEvent={lastEvent}
             demoRoomId={demoRoomId}
             randomBlinkOn={randomBlinkOn}
             lastBlink={lastBlink}

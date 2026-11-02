@@ -12,10 +12,13 @@ import { isRenderedDemoRoom, pickRandomItem, waitForDemoRoomId } from '../../../
 import { getDemoProxyBearer } from '../../../demoSession';
 import { getDemoThemeOptions } from '../../../demoThemes';
 import { getSurfyDemoBaseUrl } from '../../../surfyEnv';
+import { useDemoResponsive } from '../../../responsive/DemoResponsiveContext';
 import { useDemoTheme } from '../../../useDemoTheme';
+import { afterLayoutViewportSettled } from './afterLayoutViewportSettled.helper';
 import {
   API_LOG_MAX_LINES,
   DEMO_ROOM_COLOR,
+  DEMO_ZOOM_DIAMETER_METERS,
   RANDOM_BLINK_INTERVAL_MS,
   RANDOM_ROOM_COLORS,
 } from './layoutDemo.constants';
@@ -47,7 +50,10 @@ export function useLayoutDemoChrome(params: {
 }) {
   const { layoutRef, active, entityId, tenant, pinFloorId } = params;
   const { themeId } = useDemoTheme();
+  const { isCompact } = useDemoResponsive();
+  const cancelZoomRef = useRef<(() => void) | null>(null);
   const [lastEvent, setLastEvent] = useState('none');
+  const [eventLog, setEventLog] = useState<string[]>([]);
   const [demoRoomId, setDemoRoomId] = useState<number | undefined>(undefined);
   const [fillParent, setFillParent] = useState(true);
   const [randomBlinkOn, setRandomBlinkOn] = useState(false);
@@ -61,6 +67,14 @@ export function useLayoutDemoChrome(params: {
 
   const pushApiLine = useCallback((line: string) => {
     setApiLog((prev) => [...prev, line].slice(-API_LOG_MAX_LINES));
+  }, []);
+
+  const pushEvent = useCallback((line: string, opts?: { readonly keepInLog?: boolean }) => {
+    setLastEvent(line);
+    if (opts?.keepInLog === false) {
+      return;
+    }
+    setEventLog((prev) => [line, ...prev].slice(0, 12));
   }, []);
 
   useEffect(() => {
@@ -161,12 +175,12 @@ export function useLayoutDemoChrome(params: {
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : 'pin failed';
-        setLastEvent(`surfy:error PIN ${message}`);
+        pushEvent(`surfy:error PIN ${message}`);
       })
       .finally(() => {
         setPinBusy(false);
       });
-  }, [pinFloorId, pinBusy, layoutRef, loadPinLayoutData, pushApiLine]);
+  }, [pinFloorId, pinBusy, layoutRef, loadPinLayoutData, pushApiLine, pushEvent]);
 
   const pinOnRandomPlan = useCallback(() => {
     if (pinFloorId === undefined || pinBusy) return;
@@ -182,22 +196,41 @@ export function useLayoutDemoChrome(params: {
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : 'pin failed';
-        setLastEvent(`surfy:error PIN ${message}`);
+        pushEvent(`surfy:error PIN ${message}`);
       })
       .finally(() => {
         setPinBusy(false);
       });
-  }, [pinFloorId, pinBusy, layoutRef, loadPinLayoutData, pushApiLine]);
+  }, [pinFloorId, pinBusy, layoutRef, loadPinLayoutData, pushApiLine, pushEvent]);
 
   const clearPins = useCallback(() => {
     layoutRef.current?.clearPins();
     pushApiLine(snippetClearPins());
   }, [layoutRef, pushApiLine]);
 
+  const zoomOnRoomCentered = useCallback(
+    (roomId: number, opts?: { readonly logSnippet?: boolean }) => {
+      cancelZoomRef.current?.();
+      cancelZoomRef.current = afterLayoutViewportSettled(() => {
+        const layout = layoutRef.current;
+        if (!layout || !isRenderedDemoRoom(layout, roomId)) {
+          return;
+        }
+        layout.zoomOn({ roomId, diameterMeters: DEMO_ZOOM_DIAMETER_METERS });
+        if (opts?.logSnippet) {
+          pushApiLine(
+            `layout.zoomOn({ roomId: ${roomId}, diameterMeters: ${DEMO_ZOOM_DIAMETER_METERS} });`,
+          );
+        }
+      });
+    },
+    [layoutRef, pushApiLine],
+  );
+
   const createMountListeners = useCallback(
     () => ({
       onReady: () => {
-        setLastEvent('surfy:ready');
+        pushEvent('surfy:ready');
         const current = layoutRef.current;
         if (!current) return;
         void waitForDemoRoomId(current).then((roomId) => {
@@ -206,8 +239,9 @@ export function useLayoutDemoChrome(params: {
         });
       },
       onRoomHover: (detail: { roomId: number; name: string } | null) => {
-        setLastEvent(
+        pushEvent(
           detail ? `surfy:room-hover ${detail.roomId} ${detail.name}` : 'surfy:room-hover leave',
+          { keepInLog: false },
         );
       },
       onRoomSelected: (detail: { roomId: number; name: string }) => {
@@ -215,20 +249,26 @@ export function useLayoutDemoChrome(params: {
         if (rendered.length === 0 || rendered.includes(detail.roomId)) {
           setDemoRoomId(detail.roomId);
         }
-        setLastEvent(`surfy:room-selected ${detail.roomId} ${detail.name}`);
+        pushEvent(`surfy:room-selected ${detail.roomId} ${detail.name}`);
+        if (isCompact) {
+          zoomOnRoomCentered(detail.roomId);
+        }
       },
       onError: (detail: SurfySdkErrorDetail) => {
-        setLastEvent(`surfy:error ${detail.code} ${detail.message}`);
+        pushEvent(`surfy:error ${detail.code} ${detail.message}`);
       },
     }),
-    [layoutRef],
+    [layoutRef, pushEvent, isCompact, zoomOnRoomCentered],
   );
 
   const resetOnUnmount = useCallback(() => {
+    cancelZoomRef.current?.();
+    cancelZoomRef.current = null;
     setRandomBlinkOn(false);
     setLastBlink(null);
     setDemoRoomId(undefined);
     setApiLog([]);
+    setEventLog([]);
     setLastEvent('none');
     setPinBusy(false);
     layoutDataCacheRef.current = null;
@@ -237,6 +277,7 @@ export function useLayoutDemoChrome(params: {
   return {
     themeId,
     lastEvent,
+    eventLog,
     demoRoomId,
     fillParent,
     setFillParent,
@@ -252,6 +293,7 @@ export function useLayoutDemoChrome(params: {
     pinOnRandomRoom,
     pinOnRandomPlan,
     clearPins,
+    zoomOnRoomCentered,
     createMountListeners,
     resetOnUnmount,
   };

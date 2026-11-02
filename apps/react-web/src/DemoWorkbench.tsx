@@ -10,6 +10,10 @@ import {
 import { DemoScopePicker } from './DemoScopePicker';
 import { fetchDemoCatalog, type DemoBuilding, type DemoCatalog, type DemoFloor } from './fetchDemoCatalog';
 import { useDemoI18n } from './i18n/DemoI18nProvider';
+import {
+  DemoResponsiveSlot,
+  useDemoResponsive,
+} from './responsive/DemoResponsiveContext';
 
 /** Layout WC panels — pull `@surfy/surfy-sdk` (index + Three). Lazy so platform never loads them. */
 const Floor2dDemoPanel = lazy(async () => {
@@ -57,6 +61,7 @@ interface DemoWorkbenchProps {
  */
 export function DemoWorkbench({ activeSection }: DemoWorkbenchProps) {
   const { t } = useDemoI18n();
+  const { isCompact } = useDemoResponsive();
   const [catalog, setCatalog] = useState<DemoCatalog | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -116,23 +121,45 @@ export function DemoWorkbench({ activeSection }: DemoWorkbenchProps) {
       ) : null}
 
       {catalog && layoutSection ? (
-        <div className="demo-workbench__toolbar">
-          <p className="demo-tenant" data-testid="demo-tenant">
-            {t('workbench.tenant')}: <code>{catalog.tenant}</code>
-          </p>
-          <DemoScopePicker
-            buildings={catalog.buildings}
-            selectedBuildingId={buildingId}
-            selectedFloorId={floorId}
-            onBuildingChange={onBuildingChange}
-            onFloorChange={setFloorId}
-            variant={scopeVariant}
-            disabled={catalogLoading}
-          />
-          {scopeVariant === 'floor' && selectedBuilding && selectedBuilding.floors.length === 0 ? (
-            <p className="demo-catalog-hint">{t('workbench.noFloors')}</p>
-          ) : null}
-        </div>
+        isCompact ? (
+          <DemoResponsiveSlot name="scope">
+            <div className="demo-workbench__toolbar">
+              <p className="demo-tenant" data-testid="demo-tenant">
+                {t('workbench.tenant')}: <code>{catalog.tenant}</code>
+              </p>
+              <DemoScopePicker
+                buildings={catalog.buildings}
+                selectedBuildingId={buildingId}
+                selectedFloorId={floorId}
+                onBuildingChange={onBuildingChange}
+                onFloorChange={setFloorId}
+                variant={scopeVariant}
+                disabled={catalogLoading}
+              />
+              {scopeVariant === 'floor' && selectedBuilding && selectedBuilding.floors.length === 0 ? (
+                <p className="demo-catalog-hint">{t('workbench.noFloors')}</p>
+              ) : null}
+            </div>
+          </DemoResponsiveSlot>
+        ) : (
+          <div className="demo-workbench__toolbar">
+            <p className="demo-tenant" data-testid="demo-tenant">
+              {t('workbench.tenant')}: <code>{catalog.tenant}</code>
+            </p>
+            <DemoScopePicker
+              buildings={catalog.buildings}
+              selectedBuildingId={buildingId}
+              selectedFloorId={floorId}
+              onBuildingChange={onBuildingChange}
+              onFloorChange={setFloorId}
+              variant={scopeVariant}
+              disabled={catalogLoading}
+            />
+            {scopeVariant === 'floor' && selectedBuilding && selectedBuilding.floors.length === 0 ? (
+              <p className="demo-catalog-hint">{t('workbench.noFloors')}</p>
+            ) : null}
+          </div>
+        )
       ) : null}
 
       {activeSection === 'data-api' ? <DataApiDemoPanel active /> : null}

@@ -1,6 +1,10 @@
 import type { ReactNode, RefObject } from 'react';
 
 import { useDemoI18n } from '../../../i18n/DemoI18nProvider';
+import {
+  DemoResponsiveSlot,
+  useDemoResponsive,
+} from '../../../responsive/DemoResponsiveContext';
 import type { DemoSurfaceMode } from './demoSurfaceMode';
 import { DemoSurfaceModeToggle } from './DemoSurfaceModeToggle';
 
@@ -13,6 +17,7 @@ interface LayoutDemoShellProps {
   readonly registered: boolean;
   readonly hasEntity: boolean;
   readonly sidebar: ReactNode;
+  readonly events?: ReactNode;
   readonly mapHostRef?: RefObject<HTMLDivElement | null>;
   readonly mapChildren?: ReactNode;
   readonly surfaceMode: DemoSurfaceMode;
@@ -29,12 +34,14 @@ export function LayoutDemoShell({
   registered,
   hasEntity,
   sidebar,
+  events,
   mapHostRef,
   mapChildren,
   surfaceMode,
   onSurfaceModeChange,
 }: LayoutDemoShellProps) {
   const { t } = useDemoI18n();
+  const { isCompact } = useDemoResponsive();
 
   return (
     <section className="demo-section" data-testid={testId}>
@@ -63,9 +70,20 @@ export function LayoutDemoShell({
         </div>
       ) : (
         <div className="demo-section__workspace">
-          <aside className="demo-section__sidebar" data-testid="demo-sidebar">
-            {sidebar}
-          </aside>
+          {isCompact ? (
+            <>
+              <DemoResponsiveSlot name="controls">
+                <DemoSurfaceModeToggle value={surfaceMode} onChange={onSurfaceModeChange} />
+                {sidebar}
+              </DemoResponsiveSlot>
+              {events ? <DemoResponsiveSlot name="events">{events}</DemoResponsiveSlot> : null}
+            </>
+          ) : (
+            <aside className="demo-section__sidebar" data-testid="demo-sidebar">
+              {sidebar}
+              {events}
+            </aside>
+          )}
           <div className="demo-section__map">
             {surfaceMode === 'api-js' ? (
               <div ref={mapHostRef} className="layout-host" data-testid="layout-host" />

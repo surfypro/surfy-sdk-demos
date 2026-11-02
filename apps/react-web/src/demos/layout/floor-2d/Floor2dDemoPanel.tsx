@@ -2,8 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SurfyLayout } from '@surfy/surfy-sdk';
 import { SurfySdk } from '@surfy/surfy-sdk';
 
-import { buildApiSnippetBlock, snippetFitToView, snippetZoomOnRoom } from '../../../demoApiSnippets';
-import { isRenderedDemoRoom } from '../../../demoLayoutElement';
+import { buildApiSnippetBlock, snippetFitToView } from '../../../demoApiSnippets';
 import { getDemoProxyBearer } from '../../../demoSession';
 import { getDemoThemeOptions } from '../../../demoThemes';
 import { getSurfyDemoBaseUrl } from '../../../surfyEnv';
@@ -11,7 +10,10 @@ import { useDemoAssetsBaseUrl } from '../../../useDemoAssetsBaseUrl';
 import { ApiSnippetPanel } from '../actions/ApiSnippetPanel';
 import type { DemoSurfaceMode } from '../shared/demoSurfaceMode';
 import { DemoReactFloorHost } from '../shared/DemoReactLayoutHost';
-import { LayoutDemoCommonActions } from '../shared/LayoutDemoCommonActions';
+import {
+  LayoutDemoCommonActions,
+  LayoutDemoLastEvent,
+} from '../shared/LayoutDemoCommonActions';
 import { LayoutDemoShell } from '../shared/LayoutDemoShell';
 import { useLayoutDemoChrome } from '../shared/useLayoutDemoChrome';
 
@@ -48,6 +50,7 @@ export function Floor2dDemoPanel({
     createMountListeners,
     resetOnUnmount,
     lastEvent,
+    eventLog,
     demoRoomId,
     randomBlinkOn,
     lastBlink,
@@ -61,6 +64,7 @@ export function Floor2dDemoPanel({
     pinOnRandomRoom,
     pinOnRandomPlan,
     clearPins,
+    zoomOnRoomCentered,
     apiLog,
   } = useLayoutDemoChrome({
     layoutRef,
@@ -77,13 +81,9 @@ export function Floor2dDemoPanel({
 
   const zoomOnRoom = useCallback(
     (roomId: number) => {
-      if (!isRenderedDemoRoom(layoutRef.current, roomId)) {
-        return;
-      }
-      layoutRef.current?.zoomOn({ roomId, diameterMeters: 5 });
-      pushApiLine(snippetZoomOnRoom(roomId));
+      zoomOnRoomCentered(roomId, { logSnippet: true });
     },
-    [pushApiLine],
+    [zoomOnRoomCentered],
   );
 
   useEffect(() => {
@@ -146,10 +146,10 @@ export function Floor2dDemoPanel({
           <DemoReactFloorHost kind="floor-2d" tenant={tenant} floorId={floorId} />
         ) : null
       }
+      events={<LayoutDemoLastEvent lastEvent={lastEvent} eventLog={eventLog} />}
       sidebar={
         <>
           <LayoutDemoCommonActions
-            lastEvent={lastEvent}
             demoRoomId={demoRoomId}
             randomBlinkOn={randomBlinkOn}
             lastBlink={lastBlink}

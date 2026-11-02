@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { useDemoI18n } from '../../../i18n/DemoI18nProvider';
 import { ClearColorsAction } from '../actions/ClearColorsAction';
@@ -11,7 +11,6 @@ import { ZoomOnRoomAction } from '../actions/ZoomOnRoomAction';
 import type { LayoutDemoBlink } from './useLayoutDemoChrome';
 
 interface LayoutDemoCommonActionsProps {
-  readonly lastEvent: string;
   readonly demoRoomId: number | undefined;
   readonly randomBlinkOn: boolean;
   readonly lastBlink: LayoutDemoBlink | null;
@@ -33,9 +32,45 @@ interface LayoutDemoCommonActionsProps {
   readonly extraSidebar?: ReactNode;
 }
 
+export function LayoutDemoLastEvent({
+  lastEvent,
+  eventLog = [],
+}: {
+  readonly lastEvent: string;
+  readonly eventLog?: readonly string[];
+}) {
+  const { t } = useDemoI18n();
+  const [selectedEventIndex, setSelectedEventIndex] = useState<number | null>(null);
+  const lines = eventLog.length > 0 ? eventLog : lastEvent !== 'none' ? [lastEvent] : [];
+
+  return (
+    <div className="demo-events-log" data-testid="demo-layout-event-log">
+      <p className="demo-events-log__line">
+        {t('layout.lastEvent')}: <span data-testid="demo-last-event">{lastEvent}</span>
+      </p>
+      {lines.length > 0 ? (
+        <ul className="demo-events-log__list">
+          {lines.map((line, index) => (
+            <li key={`${index}-${line}`}>
+              <button
+                type="button"
+                className={`demo-events-log__item${
+                  selectedEventIndex === index ? ' demo-events-log__item--selected' : ''
+                }`}
+                onClick={() => setSelectedEventIndex(index)}
+              >
+                <code>{line}</code>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 /** Color / blink / clear / zoom / pins / fill-parent — same for floor-2d and building-3d. */
 export function LayoutDemoCommonActions({
-  lastEvent,
   demoRoomId,
   randomBlinkOn,
   lastBlink,
@@ -54,13 +89,8 @@ export function LayoutDemoCommonActions({
   extraActions,
   extraSidebar,
 }: LayoutDemoCommonActionsProps) {
-  const { t } = useDemoI18n();
-
   return (
     <>
-      <p>
-        {t('layout.lastEvent')}: <span data-testid="demo-last-event">{lastEvent}</span>
-      </p>
       <div className="actions">
         <ColorRoomAction
           demoRoomId={demoRoomId}

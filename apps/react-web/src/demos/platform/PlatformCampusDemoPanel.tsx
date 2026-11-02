@@ -16,6 +16,10 @@ import { getSurfyDemoBaseUrl } from '../../surfyEnv';
 import { useDemoAssetsBaseUrl } from '../../useDemoAssetsBaseUrl';
 import { useDemoI18n } from '../../i18n/DemoI18nProvider';
 import {
+  DemoResponsiveSlot,
+  useDemoResponsive,
+} from '../../responsive/DemoResponsiveContext';
+import {
   DEMO_PLATFORM_BUILDING_DETAIL_FIXTURE,
   DEMO_PLATFORM_GEO_INJECT,
   DEMO_PLATFORM_VISION_FIXTURE,
@@ -209,7 +213,7 @@ function PlatformFloorsList({ mountNode }: PlatformHostListProps) {
 
   const selectFloor = useCallback(
     (floorId: number) => {
-      if (zoom.buildingId == null) {
+      if (zoom.buildingId === null || zoom.buildingId === undefined) {
         return;
       }
       setZoom({
@@ -247,7 +251,7 @@ function PlatformFloorsList({ mountNode }: PlatformHostListProps) {
                   data-selected={selected ? 'true' : 'false'}
                   aria-pressed={selected}
                   aria-label={label}
-                  disabled={zoom.buildingId == null}
+                  disabled={zoom.buildingId === null || zoom.buildingId === undefined}
                   onClick={() => selectFloor(floor.id)}
                 >
                   <span className="demo-platform-floor-row__label">{label}</span>
@@ -276,6 +280,41 @@ type HostCompatState =
       readonly reason: string;
     };
 
+function PlatformEventLog({
+  log,
+  selectedEventIndex,
+  onSelect,
+  title,
+  hideTitle = false,
+}: {
+  readonly log: readonly string[];
+  readonly selectedEventIndex: number | null;
+  readonly onSelect: (index: number) => void;
+  readonly title: string;
+  readonly hideTitle?: boolean;
+}) {
+  return (
+    <div className="demo-events-log" data-testid="demo-platform-event-log">
+      {hideTitle ? null : <strong>{title}</strong>}
+      <ul className="demo-events-log__list">
+        {log.map((line, index) => (
+          <li key={`${index}-${line}`}>
+            <button
+              type="button"
+              className={`demo-events-log__item${
+                selectedEventIndex === index ? ' demo-events-log__item--selected' : ''
+              }`}
+              onClick={() => onSelect(index)}
+            >
+              <code>{line}</code>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function PlatformCampusDemoPanel({
   active,
   tenant: tenantProp,
@@ -283,11 +322,13 @@ export function PlatformCampusDemoPanel({
   description,
 }: PlatformCampusDemoPanelProps) {
   const { t } = useDemoI18n();
+  const { isCompact } = useDemoResponsive();
   const [tenant, setTenant] = useState(tenantProp ?? '');
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [hostCompat, setHostCompat] = useState<HostCompatState>({ status: 'pending' });
   const [ready, setReady] = useState(false);
   const [log, setLog] = useState<string[]>([]);
+  const [selectedEventIndex, setSelectedEventIndex] = useState<number | null>(null);
   const [buildingsSlot, setBuildingsSlot] = useState<HTMLElement | null>(null);
   const [floorsSlot, setFloorsSlot] = useState<HTMLElement | null>(null);
   const [altitudeSlot, setAltitudeSlot] = useState<HTMLElement | null>(null);
@@ -363,7 +404,7 @@ export function PlatformCampusDemoPanel({
         const hostVersion = payload.version?.trim() || 'unknown';
         const cmp = compareDemoSurfyHostVersion(hostVersion, SURFY_SDK_MIN_HOST_VERSION);
         if (cancelled) return;
-        if (cmp == null || cmp < 0) {
+        if (cmp === null || cmp === undefined || cmp < 0) {
           setHostCompat({
             status: 'fixtures',
             hostVersion,
@@ -460,64 +501,124 @@ export function PlatformCampusDemoPanel({
 
       {tenant ? (
         <div className="demo-section__workspace">
-          <aside className="demo-section__sidebar" data-testid="demo-platform-sidebar">
-            <div
-              ref={setBuildingsSlot}
-              data-testid="demo-platform-buildings-slot"
-              className="demo-platform-buildings-slot"
-            />
-            <div
-              ref={setFloorsSlot}
-              data-testid="demo-platform-floors-slot"
-              className="demo-platform-floors-slot"
-            />
-            <div
-              ref={setAltitudeSlot}
-              data-testid="demo-platform-altitude-slot"
-              className="demo-platform-altitude-slot"
-            />
-            <p className="demo-section__description">
-              {useFixtures ? t('platform.fixturesNote') : t('platform.liveApiNote')}
-            </p>
-            {hostCompat.status === 'fixtures' ? (
-              <p
-                className="demo-catalog-error"
-                role="status"
-                data-testid="demo-platform-host-compat"
-              >
-                {hostCompat.reason}
+          {isCompact ? (
+            <>
+              <DemoResponsiveSlot name="controls">
+                <div data-testid="demo-platform-sidebar">
+                  <div
+                    ref={setBuildingsSlot}
+                    data-testid="demo-platform-buildings-slot"
+                    className="demo-platform-buildings-slot"
+                  />
+                  <div
+                    ref={setFloorsSlot}
+                    data-testid="demo-platform-floors-slot"
+                    className="demo-platform-floors-slot"
+                  />
+                  <div
+                    ref={setAltitudeSlot}
+                    data-testid="demo-platform-altitude-slot"
+                    className="demo-platform-altitude-slot"
+                  />
+                  <p className="demo-section__description">
+                    {useFixtures ? t('platform.fixturesNote') : t('platform.liveApiNote')}
+                  </p>
+                  {hostCompat.status === 'fixtures' ? (
+                    <p
+                      className="demo-catalog-error"
+                      role="status"
+                      data-testid="demo-platform-host-compat"
+                    >
+                      {hostCompat.reason}
+                    </p>
+                  ) : null}
+                  {hostCompat.status === 'live' ? (
+                    <p className="demo-section__tag" data-testid="demo-platform-host-compat">
+                      {t('platform.hostVersionOk', {
+                        host: hostCompat.hostVersion,
+                        min: SURFY_SDK_MIN_HOST_VERSION,
+                      })}
+                    </p>
+                  ) : null}
+                  {cubyHydrateError ? (
+                    <p
+                      className="demo-catalog-error"
+                      role="alert"
+                      data-testid="demo-platform-cuby-hydrate-error"
+                    >
+                      {t('platform.cubyHydrateError')}
+                      <br />
+                      <code>{t('platform.cubyHydrateErrorDetail', { detail: cubyHydrateError })}</code>
+                    </p>
+                  ) : null}
+                </div>
+              </DemoResponsiveSlot>
+              <DemoResponsiveSlot name="events">
+                <PlatformEventLog
+                  log={log}
+                  selectedEventIndex={selectedEventIndex}
+                  onSelect={setSelectedEventIndex}
+                  title={t('platform.events')}
+                  hideTitle
+                />
+              </DemoResponsiveSlot>
+            </>
+          ) : (
+            <aside className="demo-section__sidebar" data-testid="demo-platform-sidebar">
+              <div
+                ref={setBuildingsSlot}
+                data-testid="demo-platform-buildings-slot"
+                className="demo-platform-buildings-slot"
+              />
+              <div
+                ref={setFloorsSlot}
+                data-testid="demo-platform-floors-slot"
+                className="demo-platform-floors-slot"
+              />
+              <div
+                ref={setAltitudeSlot}
+                data-testid="demo-platform-altitude-slot"
+                className="demo-platform-altitude-slot"
+              />
+              <p className="demo-section__description">
+                {useFixtures ? t('platform.fixturesNote') : t('platform.liveApiNote')}
               </p>
-            ) : null}
-            {hostCompat.status === 'live' ? (
-              <p className="demo-section__tag" data-testid="demo-platform-host-compat">
-                {t('platform.hostVersionOk', {
-                  host: hostCompat.hostVersion,
-                  min: SURFY_SDK_MIN_HOST_VERSION,
-                })}
-              </p>
-            ) : null}
-            {cubyHydrateError ? (
-              <p
-                className="demo-catalog-error"
-                role="alert"
-                data-testid="demo-platform-cuby-hydrate-error"
-              >
-                {t('platform.cubyHydrateError')}
-                <br />
-                <code>{t('platform.cubyHydrateErrorDetail', { detail: cubyHydrateError })}</code>
-              </p>
-            ) : null}
-            <div data-testid="demo-platform-event-log">
-              <strong>{t('platform.events')}</strong>
-              <ul>
-                {log.map((line, index) => (
-                  <li key={`${index}-${line}`}>
-                    <code>{line}</code>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </aside>
+              {hostCompat.status === 'fixtures' ? (
+                <p
+                  className="demo-catalog-error"
+                  role="status"
+                  data-testid="demo-platform-host-compat"
+                >
+                  {hostCompat.reason}
+                </p>
+              ) : null}
+              {hostCompat.status === 'live' ? (
+                <p className="demo-section__tag" data-testid="demo-platform-host-compat">
+                  {t('platform.hostVersionOk', {
+                    host: hostCompat.hostVersion,
+                    min: SURFY_SDK_MIN_HOST_VERSION,
+                  })}
+                </p>
+              ) : null}
+              {cubyHydrateError ? (
+                <p
+                  className="demo-catalog-error"
+                  role="alert"
+                  data-testid="demo-platform-cuby-hydrate-error"
+                >
+                  {t('platform.cubyHydrateError')}
+                  <br />
+                  <code>{t('platform.cubyHydrateErrorDetail', { detail: cubyHydrateError })}</code>
+                </p>
+              ) : null}
+              <PlatformEventLog
+                log={log}
+                selectedEventIndex={selectedEventIndex}
+                onSelect={setSelectedEventIndex}
+                title={t('platform.events')}
+              />
+            </aside>
+          )}
           <div className="demo-section__map">
             <div
               className="layout-host layout-host--react"

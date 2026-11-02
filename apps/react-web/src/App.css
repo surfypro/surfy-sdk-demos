@@ -293,21 +293,22 @@
   align-self: stretch;
 }
 
+/* Legacy narrow fallback when JS compact mode is off — stack without eating the map. */
 @media (max-width: 900px) {
-  .demo-section__workspace {
+  .page:not(.page--compact) .demo-section__workspace {
     flex-direction: column;
   }
 
-  .demo-section__sidebar {
+  .page:not(.page--compact) .demo-section__sidebar {
     flex: 0 0 auto;
     width: 100%;
     max-width: none;
-    max-height: 42vh;
+    max-height: 28vh;
   }
 
-  .demo-section__map {
+  .page:not(.page--compact) .demo-section__map {
     flex: 1 1 auto;
-    min-height: 50vh;
+    min-height: 0;
   }
 }
 
@@ -597,4 +598,293 @@ button:disabled {
   background: var(--demo-accent);
   border-color: var(--demo-accent);
   color: #fff;
+}
+
+/* —— Compact phone chrome —— */
+.page--compact {
+  padding: 0;
+  gap: 0;
+}
+
+.page--compact .page__header--compact {
+  flex-wrap: nowrap;
+  gap: 8px;
+  min-height: 48px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--demo-border);
+  background: var(--demo-surface);
+}
+
+.page__hamburger {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--demo-border);
+  border-radius: 8px;
+  background: var(--demo-surface);
+}
+
+.page__hamburger-icon,
+.page__hamburger-icon::before,
+.page__hamburger-icon::after {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: var(--demo-text);
+  border-radius: 1px;
+  position: relative;
+}
+
+.page__hamburger-icon::before,
+.page__hamburger-icon::after {
+  content: '';
+  position: absolute;
+  left: 0;
+}
+
+.page__hamburger-icon::before {
+  top: -6px;
+}
+
+.page__hamburger-icon::after {
+  top: 6px;
+}
+
+.page__header-brand--compact {
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+}
+
+.page__section-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.page__drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: rgb(0 0 0 / 35%);
+  cursor: pointer;
+}
+
+.page__drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 50;
+  width: min(88vw, 340px);
+  overflow: auto;
+  padding: 14px 12px 24px;
+  background: var(--demo-surface);
+  border-right: 1px solid var(--demo-border);
+  box-shadow: 4px 0 24px rgb(0 0 0 / 12%);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.page__drawer--closed {
+  visibility: hidden;
+}
+
+.page__drawer-heading {
+  margin: 0 0 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--demo-muted);
+}
+
+.page__drawer-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.page__drawer-link {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--demo-text);
+  border: 1px solid transparent;
+  font-size: 0.95rem;
+}
+
+.page__drawer-link--active {
+  border-color: var(--demo-accent);
+  background: color-mix(in srgb, var(--demo-accent) 14%, transparent);
+  font-weight: 600;
+}
+
+.page__header-actions--drawer {
+  margin-left: 0;
+}
+
+.page__drawer-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.page--compact .page__main {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0;
+}
+
+.page--compact .demo-section__header {
+  display: none;
+}
+
+.page--compact .demo-workbench {
+  gap: 0;
+}
+
+.page--compact .demo-section__workspace {
+  flex-direction: column;
+  gap: 0;
+}
+
+.page--compact .demo-section__map {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.page--compact .layout-host {
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+}
+
+.page--compact .demo-data-result {
+  max-height: none;
+  flex: 1;
+  height: 100%;
+  border-radius: 0;
+}
+
+.page--compact .demo-section__map .demo-data-result__title {
+  margin: 8px 12px 0;
+  font-size: 0.85rem;
+}
+
+.page__events {
+  /* Fixed strip height so logging events does not resize the map (false “dezoom”). */
+  --demo-events-strip-height: min(128px, 22vh);
+  flex: 0 0 var(--demo-events-strip-height);
+  height: var(--demo-events-strip-height);
+  max-height: var(--demo-events-strip-height);
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--demo-border);
+  background: var(--demo-surface);
+  box-sizing: border-box;
+}
+
+.page__events--collapsed {
+  --demo-events-strip-height: auto;
+  flex: 0 0 auto;
+  height: auto;
+  max-height: none;
+}
+
+.page__events-header {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.page__events-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.page__events-toggle:hover {
+  background: color-mix(in srgb, var(--demo-border, #ddd) 28%, transparent);
+}
+
+.page__events-title {
+  font-size: 0.85rem;
+}
+
+.page__events-chevron {
+  flex: 0 0 auto;
+  color: var(--demo-muted);
+}
+
+.page__events-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 10px 8px;
+}
+
+.demo-events-log__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.demo-events-log > strong + .demo-events-log__list,
+.demo-events-log > .demo-events-log__line + .demo-events-log__list {
+  margin-top: 6px;
+}
+
+.demo-events-log__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.demo-events-log__item:hover {
+  background: color-mix(in srgb, var(--demo-border, #ddd) 35%, transparent);
+}
+
+.demo-events-log__item--selected {
+  border-color: var(--demo-accent, #2196f3);
+  background: color-mix(in srgb, var(--demo-accent, #2196f3) 12%, transparent);
+}
+
+.demo-events-log__line {
+  margin: 0;
+  font-size: 0.85rem;
 }
